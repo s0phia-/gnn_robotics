@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import add_self_loops, degree
+from torch_geometric.utils import add_self_loops
 
 
 class Encoder(nn.Module):
@@ -17,7 +17,7 @@ class Encoder(nn.Module):
         :param device:
         """
         super().__init__()
-        self.layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.ReLU()]
+        self.layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.Tanh()]
         self.layers = nn.Sequential(*self.layers)
 
     def forward(self, x: torch.Tensor):
