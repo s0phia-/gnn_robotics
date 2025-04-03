@@ -1,16 +1,307 @@
-import gnn_util
 import os
-import numpy as np
 from bs4 import BeautifulSoup as bs
 from src.utils.logger_config import logger
-from src.utils.asset_generator import get_base_dir
+from gymnasium.envs.registration import register
+import num2words
+import numpy as np
 
-import register
+
+TASK_DICT = {
+    "Centipede": [3, 5, 7] + [4, 6, 8, 10, 12, 14, 18] + [20, 24, 30, 40, 50],
+    "CentipedeTT": [6],
+    "CpCentipede": [3, 5, 7] + [4, 6, 8, 10, 12, 14],
+    "Reacher": [0, 1, 2, 3, 4, 5, 6, 7],
+    "Snake": list(range(3, 10)) + [10, 20, 40],
+}
+
+MAX_EPISODE_STEPS_DICT = {
+    "Centipede": 1000,
+    "CentipedeTT": 1000,
+    "CpCentipede": 1000,
+    "Snake": 1000,
+    "Reacher": 50,
+}
+REWARD_THRESHOLD = {
+    "Centipede": 6000.0,
+    "CentipedeTT": 6000.0,
+    "CpCentipede": 6000.0,
+    "Snake": 360.0,
+    "Reacher": -3.75,
+}
+
+# walker list
+MULTI_TASK_DICT = {
+    "MultiWalkers-v1": [
+        "WalkersHopper-v1",
+        "WalkersHalfhumanoid-v1",
+        "WalkersHalfcheetah-v1",
+        "WalkersFullcheetah-v1",
+        "WalkersOstrich-v1",
+    ],
+    # just for implementation, only one agent will be run
+    "MultiWalkers2Kangaroo-v1": [
+        "WalkersHopper-v1",
+        "WalkersHalfhumanoid-v1",
+        "WalkersHalfcheetah-v1",
+        "WalkersFullcheetah-v1",
+        "WalkersKangaroo-v1",
+    ],
+}
+
+# test the robustness of agents
+NUM_ROBUSTNESS_AGENTS = 5
+ROBUSTNESS_TASK_DICT = {}
+for i_agent in range(NUM_ROBUSTNESS_AGENTS + 1):
+    ROBUSTNESS_TASK_DICT.update(
+        {
+            "MultiWalkers"
+            + num2words.num2words(i_agent)
+            + "-v1": [
+                "WalkersHopper" + num2words.num2words(i_agent) + "-v1",
+                "WalkersHalfhumanoid" + num2words.num2words(i_agent) + "-v1",
+                "WalkersHalfcheetah" + num2words.num2words(i_agent) + "-v1",
+                "WalkersFullcheetah" + num2words.num2words(i_agent) + "-v1",
+                "WalkersOstrich" + num2words.num2words(i_agent) + "-v1",
+            ],
+        }
+    )
+MULTI_TASK_DICT.update(ROBUSTNESS_TASK_DICT)
+
+name_list = []  # record all the environments available
+
+# register the transfer tasks
+for env_title, env in ROBUSTNESS_TASK_DICT.items():
+
+    for i_env in env:
+        file_name = "environments.multitask_env.walkers:"
+
+        # WalkersHopperone-v1, WalkersHopperoneEnv
+        entry_point = file_name + i_env.replace("-v1", "Env")
+
+        register(
+            id=i_env,
+            entry_point=entry_point,
+            max_episode_steps=1000,
+            reward_threshold=6000,
+        )
+        # register the environment name in the name list
+        name_list.append(i_env)
+
+# container for multitask experiments
+register(
+    id="CentipedeContainer-v1",
+    entry_point="environments.transfer_env.centipede_env:CentipedeContainer",
+    max_episode_steps=MAX_EPISODE_STEPS_DICT["Centipede"],
+    reward_threshold=REWARD_THRESHOLD["Centipede"],
+)
+name_list.append("CentipedeContainer-v1")
+
+# register the robustness tasks
+for env in TASK_DICT:
+    file_name = "environments.transfer_env." + env.lower() + "_env:"
+
+    for i_part in np.sort(TASK_DICT[env]):
+        # NOTE, the order in the name_list actually matters (needed during
+        # transfer learning)
+        registered_name = (
+            env
+            + num2words.num2words(i_part)[0].upper()
+            + num2words.num2words(i_part)[1:]
+        )
+        registered_name = registered_name.replace(" ", "").replace("-", "")
+        entry_point = file_name.replace("tt", "") + registered_name.replace("TT", "") + "Env"
+
+        register(
+            id=(registered_name + "-v1"),
+            entry_point=entry_point,
+            max_episode_steps=MAX_EPISODE_STEPS_DICT[env],
+            reward_threshold=REWARD_THRESHOLD[env],
+        )
+        # register the environment name in the name list
+        name_list.append(registered_name + "-v1")
+
+# register AntS-v1
+register(
+    id="AntS-v1",
+    entry_point="environments.transfer_env.antS:AntEnv",
+    max_episode_steps=1000,
+    reward_threshold=6000,
+)
+
+# register the walkers for multi-task learning
+register(
+    id="WalkersHopper-v1",
+    entry_point="environments.multitask_env.walkers:WalkersHopperEnv",
+    max_episode_steps=1000,
+    reward_threshold=3800.0,
+)
+register(
+    id="WalkersHalfhumanoid-v1",
+    entry_point="environments.multitask_env.walkers:WalkersHalfhumanoidEnv",
+    max_episode_steps=1000,
+    reward_threshold=3800.0,
+)
+register(
+    id="WalkersHalfcheetah-v1",
+    entry_point="environments.multitask_env.walkers:WalkersHalfcheetahEnv",
+    max_episode_steps=1000,
+    reward_threshold=3800.0,
+)
+register(
+    id="WalkersFullcheetah-v1",
+    entry_point="environments.multitask_env.walkers:WalkersFullcheetahEnv",
+    max_episode_steps=1000,
+    reward_threshold=3800.0,
+)
+register(
+    id="WalkersOstrich-v1",
+    entry_point="environments.multitask_env.walkers:WalkersOstrichEnv",
+    max_episode_steps=1000,
+    reward_threshold=3800.0,
+)
+register(
+    id="WalkersKangaroo-v1",
+    entry_point="environments.multitask_env.walkers:WalkersKangarooEnv",
+    max_episode_steps=1000,
+    reward_threshold=3800.0,
+)
+
+
+def get_mujoco_model_settings():
+    """
+        @brief:
+            @traditional environments:
+                1. Humanoid-v1
+                2. HumanoidStandup-v1
+                3. HalfCheetah-v1
+                4. Hopper-v1
+                5. Walker2d-v1
+                6. AntS-v1
+
+            @transfer-learning environments:
+                1. Centipede
+                2. Snake
+                4. Reacher
+    """
+    # step 0: settings about the joint
+    JOINT_KEY = ["qpos", "qvel", "qfrc_constr", "qfrc_act"]
+    BODY_KEY = ["cinert", "cvel", "cfrc"]
+
+    ROOT_OB_SIZE = {
+        "qpos": {"free": 7, "hinge": 1, "slide": 1},
+        "qvel": {"free": 6, "hinge": 1, "slide": 1},
+        "qfrc_act": {"free": 6, "hinge": 1, "slide": 1},
+        "qfrc_constr": {"free": 6, "hinge": 1, "slide": 1},
+    }
+
+    # step 1: register the settings for traditional environments
+    SYMMETRY_MAP = {
+        "Humanoid-v2": 2,
+        "HumanoidStandup-v1": 2,
+        "HalfCheetah-v3": 1,
+        "Hopper-v3": 1,
+        "Walker2d-v3": 1,
+        "AntS-v1": 2,
+        "Swimmer-v3": 2,
+        "WalkersHopper-v1": 1,
+        "WalkersHalfhumanoid-v1": 1,
+        "WalkersHalfcheetah-v1": 1,
+        "WalkersFullcheetah-v1": 1,
+        "WalkersOstrich-v1": 1,
+        "WalkersKangaroo-v1": 1,
+    }
+
+    XML_DICT = {
+        "Humanoid-v2": "humanoid.xml",
+        "HumanoidStandup-v1": "humanoid.xml",
+        "HalfCheetah-v3": "half_cheetah.xml",
+        "Hopper-v3": "hopper.xml",
+        "Walker2d-v3": "walker2d.xml",
+        "AntS-v1": "ant.xml",
+        "Swimmer-v3": "SnakeThree.xml",
+        "WalkersHopper-v1": "WalkersHopper.xml",
+        "WalkersHalfhumanoid-v1": "WalkersHalfhumanoid.xml",
+        "WalkersHalfcheetah-v1": "WalkersHalfcheetah.xml",
+        "WalkersFullcheetah-v1": "WalkersFullcheetah.xml",
+        "WalkersOstrich-v1": "WalkersOstrich.xml",
+        "WalkersKangaroo-v1": "WalkersKangaroo.xml",
+    }
+    OB_MAP = {
+        "Humanoid-v2": ["qpos", "qvel", "cinert", "cvel", "qfrc_act", "cfrc"],
+        "HumanoidStandup-v1": ["qpos", "qvel", "cinert", "cvel", "qfrc_act", "cfrc"],
+        "HalfCheetah-v3": ["qpos", "qvel"],
+        "Hopper-v3": ["qpos", "qvel"],
+        "Walker2d-v3": ["qpos", "qvel"],
+        "AntS-v1": ["qpos", "qvel", "cfrc"],
+        "Swimmer-v3": ["qpos", "qvel"],
+        "WalkersHopper-v1": ["qpos", "qvel"],
+        "WalkersHalfhumanoid-v1": ["qpos", "qvel"],
+        "WalkersHalfcheetah-v1": ["qpos", "qvel"],
+        "WalkersFullcheetah-v1": ["qpos", "qvel"],
+        "WalkersOstrich-v1": ["qpos", "qvel"],
+        "WalkersKangaroo-v1": ["qpos", "qvel"],
+    }
+
+    # step 2: register the settings for the tranfer environments
+    SYMMETRY_MAP.update(
+        {"Centipede": 2, "CentipedeTT": 2, "CpCentipede": 2, "Snake": 2, "Reacher": 0,}
+    )
+
+    OB_MAP.update(
+        {
+            "Centipede": ["qpos", "qvel", "cfrc"],
+            "CentipedeTT": ["qpos", "qvel", "cfrc"],
+            "CpCentipede": ["qpos", "qvel", "cfrc"],
+            "Snake": ["qpos", "qvel"],
+            "Reacher": ["qpos", "qvel", "root_add_5"],
+        }
+    )
+    for env in TASK_DICT:
+        for i_part in TASK_DICT[env]:
+            registered_name = (
+                env
+                + num2words.num2words(i_part).replace("-", "")[0].upper()
+                + num2words.num2words(i_part).replace("-", "")[1:]
+                + "-v1"
+            )
+
+            SYMMETRY_MAP[registered_name] = SYMMETRY_MAP[env]
+            OB_MAP[registered_name] = OB_MAP[env]
+            XML_DICT[registered_name] = registered_name.replace("-v1", ".xml")
+
+    # ob map, symmetry map for robustness task
+    for key in ROBUSTNESS_TASK_DICT:
+        for env in ROBUSTNESS_TASK_DICT[key]:
+            OB_MAP.update({env: ["qpos", "qvel"]})
+            SYMMETRY_MAP.update({env: 1})
+    # xml dict for botustness task
+    for i_agent in range(NUM_ROBUSTNESS_AGENTS + 1):
+        XML_DICT.update(
+            {
+                "WalkersHopper"
+                + num2words.num2words(i_agent)
+                + "-v1": "WalkersHopper.xml",
+                "WalkersHalfhumanoid"
+                + num2words.num2words(i_agent)
+                + "-v1": "WalkersHalfhumanoid.xml",
+                "WalkersHalfcheetah"
+                + num2words.num2words(i_agent)
+                + "-v1": "WalkersHalfcheetah.xml",
+                "WalkersFullcheetah"
+                + num2words.num2words(i_agent)
+                + "-v1": "WalkersFullcheetah.xml",
+                "WalkersOstrich"
+                + num2words.num2words(i_agent)
+                + "-v1": "WalkersOstrich.xml",
+            }
+        )
+
+    return SYMMETRY_MAP, XML_DICT, OB_MAP, JOINT_KEY, ROOT_OB_SIZE, BODY_KEY
 
 
 __all__ = ["parse_mujoco_graph"]
 
-XML_ASSERT_DIR = os.path.join(get_base_dir(), "environments", "assets")
+XML_ASSERT_DIR = os.path.join("environments/assets")
 
 """
     Definition of nodes:
@@ -55,12 +346,10 @@ EDGE_TYPE = {
     JOINT_KEY,
     ROOT_OB_SIZE,
     BODY_KEY,
-) = register.get_mujoco_model_settings()
+) = get_mujoco_model_settings()
 
 # development status
 ALLOWED_JOINT_TYPE = ["hinge", "free", "slide"]
-
-MULTI_TASK_DICT = register.MULTI_TASK_DICT
 
 
 def parse_mujoco_graph(
@@ -222,8 +511,8 @@ def _prune_body_nodes(
     # for each joint, let it eat its father body root, the relation_matrix and
     # input_dict need to be inherited
     for node_id, i_node in enumerate(tree[0 : min(node_type_dict["body"])]):
-        if i_node["type"] is not "joint":
-            assert i_node["type"] is "root"
+        if i_node["type"] != "joint":
+            assert i_node["type"] == "root"
             continue
 
         # find all the parent
@@ -756,7 +1045,7 @@ def _append_node_parameters(tree, xml_soup, node_type_allowed, gnn_embedding_opt
                 node_parameters[type_name].append([int(i_char) for i_char in final_str])
 
         # step 4: numpy the elements, and do validation check
-        if gnn_embedding_option is not "noninput_shared_multi":
+        if gnn_embedding_option != "noninput_shared_multi":
             para_dtype = (
                 np.float32
                 if gnn_embedding_option in ["parameter", "shared"]
@@ -954,23 +1243,139 @@ def parse_mujoco_template(
     )
 
     # step 2: check for ob size for each node type, construct the node dict
-    node_info = gnn_util.construct_ob_size_dict(node_info, input_feat_dim)
+    node_info = construct_ob_size_dict(node_info, input_feat_dim)
 
     # step 3: get the inverse node offsets (used to construct gather idx)
-    node_info = gnn_util.get_inverse_type_offset(node_info, "node")
+    node_info = get_inverse_type_offset(node_info, "node")
 
     # step 4: get the inverse node offsets (used to gather output idx)
-    node_info = gnn_util.get_inverse_type_offset(node_info, "output")
+    node_info = get_inverse_type_offset(node_info, "output")
 
-    # step 5: register existing edge and get the receive and send index
-    node_info = gnn_util.get_receive_send_idx(node_info)
+    # step 5: register existing edge and get the receive index and send index
+    node_info = get_receive_send_idx(node_info)
 
     return node_info
 
 
-if __name__ == "__main__":
-    x=parse_mujoco_graph(
-        "CentipedeSix-v1",
-        gnn_node_option="nG,yB",
+def construct_ob_size_dict(node_info, input_feat_dim):
+    """
+        @brief: for each node type, we collect the ob size for this type
+    """
+    node_info["ob_size_dict"] = {}
+    for node_type in node_info["node_type_dict"]:
+        node_ids = node_info["node_type_dict"][node_type]
+
+        # record the ob_size for each type of node
+        if node_ids[0] in node_info["input_dict"]:
+            node_info["ob_size_dict"][node_type] = len(
+                node_info["input_dict"][node_ids[0]]
+            )
+        else:
+            node_info["ob_size_dict"][node_type] = 0
+
+        node_ob_size = [
+            len(node_info["input_dict"][node_id])
+            for node_id in node_ids
+            if node_id in node_info["input_dict"]
+        ]
+
+        if len(node_ob_size) == 0:
+            continue
+
+        assert node_ob_size.count(node_ob_size[0]) == len(node_ob_size), logger.error(
+            "Nodes (type {}) have wrong ob size: {}!".format(node_type, node_ob_size)
+        )
+
+    return node_info
+
+
+def get_inverse_type_offset(node_info, mode):
+    assert mode in ["output", "node"], logger.error("Invalid mode: {}".format(mode))
+    node_info["inverse_" + mode + "_extype_offset"] = []
+    node_info["inverse_" + mode + "_intype_offset"] = []
+    node_info["inverse_" + mode + "_self_offset"] = []
+    node_info["inverse_" + mode + "_original_id"] = []
+    current_offset = 0
+    for mode_type in node_info[mode + "_type_dict"]:
+        i_length = len(node_info[mode + "_type_dict"][mode_type])
+        # the original id
+        node_info["inverse_" + mode + "_original_id"].extend(
+            node_info[mode + "_type_dict"][mode_type]
+        )
+
+        # In one batch, how many element is listed before this type?
+        # e.g.: [A, A, C, B, C, A], with order [A, B, C] --> [0, 0, 4, 3, 4, 0]
+        node_info["inverse_" + mode + "_extype_offset"].extend(
+            [current_offset] * i_length
+        )
+
+        # In current type, what is the position of this node?
+        # e.g.: [A, A, C, B, C, A] --> [0, 1, 0, 0, 1, 2]
+        node_info["inverse_" + mode + "_intype_offset"].extend(list(range(i_length)))
+
+        # how many nodes are in this type?
+        # e.g.: [A, A, C, B, C, A] --> [3, 3, 2, 1, 2, 3]
+        node_info["inverse_" + mode + "_self_offset"].extend([i_length] * i_length)
+        current_offset += i_length
+
+    sorted_id = np.array(node_info["inverse_" + mode + "_original_id"])
+    sorted_id.sort()
+    node_info["inverse_" + mode + "_original_id"] = [
+        node_info["inverse_" + mode + "_original_id"].index(i_node)
+        for i_node in sorted_id
+    ]
+
+    node_info["inverse_" + mode + "_extype_offset"] = np.array(
+        [
+            node_info["inverse_" + mode + "_extype_offset"][i_node]
+            for i_node in node_info["inverse_" + mode + "_original_id"]
+        ]
     )
-    print(x['tree'])
+    node_info["inverse_" + mode + "_intype_offset"] = np.array(
+        [
+            node_info["inverse_" + mode + "_intype_offset"][i_node]
+            for i_node in node_info["inverse_" + mode + "_original_id"]
+        ]
+    )
+    node_info["inverse_" + mode + "_self_offset"] = np.array(
+        [
+            node_info["inverse_" + mode + "_self_offset"][i_node]
+            for i_node in node_info["inverse_" + mode + "_original_id"]
+        ]
+    )
+
+    return node_info
+
+
+def get_receive_send_idx(node_info):
+    # register the edges that shows up, get the number of edge type
+    edge_dict = EDGE_TYPE
+    edge_type_list = []  # if one type of edge exist, register
+
+    for edge_id in range(1000):
+        if edge_id == 0:
+            continue  # the self loop is not considered here
+        if (node_info["relation_matrix"] == edge_id).any():
+            edge_type_list.append(edge_id)
+
+    node_info["edge_type_list"] = edge_type_list
+    node_info["num_edge_type"] = len(edge_type_list)
+
+    receive_idx_raw = {}
+    receive_idx = []
+    send_idx = {}
+    for edge_type in node_info["edge_type_list"]:
+        receive_idx_raw[edge_type] = []
+        send_idx[edge_type] = []
+        i_id = np.where(node_info["relation_matrix"] == edge_type)
+        for i_edge in range(len(i_id[0])):
+            send_idx[edge_type].append(i_id[0][i_edge])
+            receive_idx_raw[edge_type].append(i_id[1][i_edge])
+            receive_idx.append(i_id[1][i_edge])
+
+    node_info["receive_idx"] = receive_idx
+    node_info["receive_idx_raw"] = receive_idx_raw
+    node_info["send_idx"] = send_idx
+    node_info["num_edges"] = len(receive_idx)
+
+    return node_info
