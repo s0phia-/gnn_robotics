@@ -2,13 +2,19 @@
 env_name: Ant-v5
 max_episodic_timesteps: 1000
 
-#agent params
+#PPO params
 lr: 3e-4
 gamma: 0.95
 clip_value: 0.1
 n_updates_per_iter: 10
 timesteps_per_batch: 2048
 total_timesteps: 1e7
+
+# GNN params
+propagation_steps: 3  # 4, 5, 6
+hidden_node_dim: 32  # 64, 128
+decoder_and_message_layers: 2
+decoder_and_message_hidden_dim: 64,  # 128, 256
 
 #misc params
 seed: 69

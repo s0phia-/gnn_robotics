@@ -99,10 +99,7 @@ class MessagePassingGNN(nn.Module):
                  in_dim: int,
                  out_dim: int,
                  device: torch.device,
-                 propagation_steps: int = 3,  # 4, 5, 6
-                 hidden_node_dim: int = 32,  # 64, 128
-                 decoder_and_message_layers: int = 2,
-                 decoder_and_message_hidden_dim: int = 64,  # 128, 256
+                 **kwargs
                  ):
         """
         Message passing GNN architecture.
@@ -111,24 +108,25 @@ class MessagePassingGNN(nn.Module):
         :param out_dim: dimensions of output of network
         """
         super().__init__()
-        self.propagation_steps = propagation_steps
+        self.__dict__.update((k, v) for k, v in kwargs.items())
+        self.propagation_steps = self.propagation_steps
 
         self.encoder = Encoder(in_dim=in_dim,
-                               hidden_dim=hidden_node_dim,
+                               hidden_dim=self.hidden_node_dim,
                                device=device).to(device)
 
         self.middle = nn.ModuleList()
-        for _ in range(propagation_steps):
-            self.middle.append(GGNN_layer(in_dim=hidden_node_dim,
-                                          out_dim=hidden_node_dim,
-                                          hidden_dim=decoder_and_message_hidden_dim,
-                                          hidden_layers=decoder_and_message_layers,
+        for _ in range(self.propagation_steps):
+            self.middle.append(GGNN_layer(in_dim=self.hidden_node_dim,
+                                          out_dim=self.hidden_node_dim,
+                                          hidden_dim=self.decoder_and_message_hidden_dim,
+                                          hidden_layers=self.decoder_and_message_layers,
                                           device=device).to(device))
 
         self.decoder = Decoder(out_dim=out_dim,
-                               in_dim=hidden_node_dim,
-                               hidden_dim=decoder_and_message_hidden_dim,
-                               hidden_layers=decoder_and_message_layers,
+                               in_dim=self.hidden_node_dim,
+                               hidden_dim=self.decoder_and_message_hidden_dim,
+                               hidden_layers=self.decoder_and_message_layers,
                                device=device).to(device)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):

@@ -13,7 +13,7 @@ class PPO:
     Implementation of Proximal Policy Optimization.
     Schulman, John, et al. "Proximal policy optimization algorithms."
     """
-    def __init__(self, device, **kwargs):
+    def __init__(self, actor, device, **kwargs):
         # extract parameters
         self.__dict__.update((k, v) for k, v in kwargs.items())
 
@@ -26,7 +26,7 @@ class PPO:
         self.action_dim = self.env.action_space.shape[0]
 
         # initialise actor and critic networks
-        self.actor = MessagePassingGNN(self.obs_dim, self.action_dim, device)
+        self.actor = actor
         self.critic = FeedForward(self.obs_dim, 1, device)
 
         # initialise optimiser for actor and critic
