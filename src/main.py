@@ -1,8 +1,6 @@
 import yaml
 import torch
 from argparse import ArgumentParser
-from src.utils.logger_config import logger
-import os
 from src.environments.mujoco_parser import parse_mujoco_graph
 
 
