@@ -6,6 +6,7 @@ from agents.ppo import PPO
 from agents.function_approximators import MessagePassingGNN
 from src.utils.logger_config import logger
 import os
+from utils.mujoco_parser import parse_mujoco_graph
 
 
 print(f"Log file should be at: {os.path.abspath('../logger.log')}")
@@ -33,23 +34,33 @@ def main(hyperparams):
         if v is not None:
             hparam[k] = v
 
+    ### testing GNN ###
+    # num_nodes = 10
+    # num_features = 16
+    #
+    # # Random node features
+    # x = torch.randn(num_nodes, num_features)
+    #
+    # # Random edges (just for demonstration)
+    # edge_index = torch.tensor([
+    #     [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 0],  # Source nodes
+    #     [1, 0, 2, 1, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6, 8, 7, 9, 8, 0, 9]  # Target nodes
+    # ], dtype=torch.long)
+    #
+    # model = MessagePassingGNN(16, 10, device)
+    # output = model(x, edge_index)
+    # print(output)
+
+    ### testing PPO ###
     # model = PPO(device, **hparam)
     # model.learn()
-    num_nodes = 10
-    num_features = 16
 
-    # Random node features
-    x = torch.randn(num_nodes, num_features)
-
-    # Random edges (just for demonstration)
-    edge_index = torch.tensor([
-        [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 0],  # Source nodes
-        [1, 0, 2, 1, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6, 8, 7, 9, 8, 0, 9]  # Target nodes
-    ], dtype=torch.long)
-
-    model = MessagePassingGNN(16, 10, device)
-    output = model(x, edge_index)
-    print(output)
+    ### testing mujoco parser ###
+    x=parse_mujoco_graph(
+        "CentipedeSix-v1",
+        gnn_node_option="nG,yB",
+    )
+    print(x['tree'])
 
 
 if __name__ == '__main__':
