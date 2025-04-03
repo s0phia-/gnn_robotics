@@ -6,18 +6,6 @@ import os
 from src.environments.mujoco_parser import parse_mujoco_graph
 
 
-print(f"Log file should be at: {os.path.abspath('../logger.log')}")
-
-# Check if your logger is properly configured
-print(f"Logger level: {logger.level}")
-print(f"Logger handlers: {logger.handlers}")
-
-# Try forcing a flush after logging
-logger.debug("Test message")
-for handler in logger.handlers:
-    handler.flush()
-
-
 def main(hyperparams):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
