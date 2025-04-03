@@ -1,12 +1,9 @@
-import torch
 import yaml
 import torch
 from argparse import ArgumentParser
-from agents.ppo import PPO
-from agents.function_approximators import MessagePassingGNN
 from src.utils.logger_config import logger
 import os
-from utils.mujoco_parser import parse_mujoco_graph
+from src.environments.mujoco_parser import parse_mujoco_graph
 
 
 print(f"Log file should be at: {os.path.abspath('../logger.log')}")
