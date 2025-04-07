@@ -1,6 +1,7 @@
 #env params
-env_name: Ant-v5
+env_name: Ant-v5,
 max_episodic_timesteps: 1000
+population_size: 8
 
 #PPO params
 lr: 3e-4
@@ -14,7 +15,7 @@ total_timesteps: 1e7
 propagation_steps: 3  # 4, 5, 6
 hidden_node_dim: 32  # 64, 128
 decoder_and_message_layers: 2
-decoder_and_message_hidden_dim: 64,  # 128, 256
+decoder_and_message_hidden_dim: 64  # 128, 256
 
 #misc params
 seed: 69
