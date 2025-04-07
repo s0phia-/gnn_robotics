@@ -121,7 +121,7 @@ class MessagePassingGNN(nn.Module):
                                           out_dim=self.hidden_node_dim,
                                           hidden_dim=self.decoder_and_message_hidden_dim,
                                           hidden_layers=self.decoder_and_message_layers,
-                                          device=device).to(device))
+                                          device=device))
 
         self.decoder = Decoder(out_dim=out_dim,
                                in_dim=self.hidden_node_dim,
