@@ -10,12 +10,18 @@ from gymnasium.spaces import Box
 
 
 class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-
-    def __init__(self, xml, seed=None):
+    render_mode = None
+    metadata = {
+        "render_modes": ["human", "rgb_array", "depth_array"],
+        "render_fps": 25,
+    }
+    def __init__(self, xml, seed=None, **kwargs):
         self.xml = xml
+        render_mode = kwargs.get('render_mode', None)
         mujoco_env.MujocoEnv.__init__(self, model_path=xml,
                                       frame_skip=4,
-                                      observation_space=Box(low=-np.inf, high=np.inf, dtype=float))
+                                      observation_space=Box(low=-np.inf, high=np.inf, shape=(135,), dtype=float),
+                                      render_mode=render_mode,)
         utils.EzPickle.__init__(self)
         if seed is not None:
             self.reset(seed=seed)
@@ -32,7 +38,7 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward -= 1e-3 * np.square(a).sum()
         done = False
         ob = self._get_obs()
-        return ob, reward, done, {}
+        return ob, reward, done, False, {}
 
     def _get_obs(self):
         def _get_obs_per_limb(body_id):
@@ -82,6 +88,9 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.init_qvel + self.np_random.uniform(low=-.005, high=.005, size=self.model.nv)
         )
         return self._get_obs()
+
+    def render(self):
+        return super().render()
 
     def viewer_setup(self):
         self.viewer.cam.trackbodyid = 2

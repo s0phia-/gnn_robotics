@@ -43,14 +43,13 @@ class MujocoParser:
 
         # Set up training env ================================================
         self.limb_obs_size, self.max_action = self.register_envs(envs_train_names, self.max_episodic_timesteps)
-
         self.max_num_limbs = max([len(self.morph_graphs[env_name]) for env_name in envs_train_names])
 
         # create vectorized training env
         obs_max_len = max([len(self.morph_graphs[env_name]) for env_name in envs_train_names]) * self.limb_obs_size
-        envs_train = [self.make_env_wrapper(name, obs_max_len, self.seed) for name in envs_train_names]
+        self.envs_train = [self.make_env_wrapper(name, obs_max_len, self.seed) for name in envs_train_names]
 
-        self.envs_train = DummyVecEnv(envs_train)  # vectorized env (necessary for multiprocessing)
+        # self.envs_train = DummyVecEnv(envs_train)  # vectorized env (necessary for multiprocessing)
 
         # determine the maximum number of children in all the training envs
         self.max_children = self.find_max_children(envs_train_names, self.morph_graphs)
@@ -121,11 +120,14 @@ class MujocoParser:
     def make_env_wrapper(env_name, obs_max_len=None, seed=0):
         """return wrapped gym environment for parallel sample collection (vectorized environments)"""
 
-        def helper():
-            e = gym.make("environments:%s-v0" % env_name, seed=seed)
-            return ModularEnvWrapper(e, obs_max_len)
+        # def helper():
+        #     e = gym.make("environments:%s-v0" % env_name, seed=seed, render_mode='human')
+        #     return ModularEnvWrapper(e, obs_max_len)
 
-        return helper
+        e = gym.make("environments:%s-v0" % env_name, seed=seed, render_mode='human')
+        e = ModularEnvWrapper(e, obs_max_len)
+
+        return e  #helper
 
 
 def quat2expmap(q):
@@ -285,8 +287,8 @@ class ModularEnvWrapper(gym.Wrapper):
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
         return obs, reward, done, info
 
-    def reset(self):
-        obs = self.env.reset()
+    def reset(self, seed=None):
+        obs = self.env.reset(seed=seed)[0]
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))

@@ -22,28 +22,15 @@ def main(hyperparams):
         if v is not None:
             hparam[k] = v
 
-    x = MujocoParser(**hparam)
-    print(x.envs_train.action_space)
-
-    # ### testing GNN ###
-    # num_nodes = 10
-    # num_features = 16
-    #
-    # # Random node features
-    # x = torch.randn(num_nodes, num_features)
-    #
-    # # Random edges (just for demonstration)
-    # edge_index = torch.tensor([
-    #     [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 0],  # Source nodes
-    #     [1, 0, 2, 1, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6, 8, 7, 9, 8, 0, 9]  # Target nodes
-    # ], dtype=torch.long)
-    #
-    # model = MessagePassingGNN(in_dim=16, out_dim=10, device=device, **hparam)
-    # output = model(x, edge_index)
-    # print(output)
+    envs = MujocoParser(**hparam).envs_train
+    # num_actions = int(envs.action_space.shape)
+    for env in envs:
+        print(env)
+        env.reset()
+        env.render()
 
     ### testing PPO ###
-    # actor = MessagePassingGNN(in_dim, out_dim, device, **hparam)
+    # actor = MessagePassingGNN(in_dim=9, out_dim=8, env=envs[0], device=device, **hparam)
     # model = PPO(device, actor, **hparam)
     # model.learn()
 
