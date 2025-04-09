@@ -13,7 +13,7 @@ class PPO:
     Implementation of Proximal Policy Optimization.
     Schulman, John, et al. "Proximal policy optimization algorithms."
     """
-    def __init__(self, actor, device, **kwargs):
+    def __init__(self, actor, device, env, **kwargs):
         # extract parameters
         self.__dict__.update((k, v) for k, v in kwargs.items())
 
@@ -21,7 +21,7 @@ class PPO:
         torch.manual_seed(self.seed)
 
         # set up environment
-        self.env = gym.make(self.env_name)
+        self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
 
