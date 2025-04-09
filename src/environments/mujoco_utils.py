@@ -1,196 +1,131 @@
 ########################################################
 ### edited from https://github.com/tommasomarzi/fgrl ###
 ########################################################
+
 import xmltodict
 import os
 from gymnasium.envs.registration import register
+from stable_baselines3.common.vec_env import DummyVecEnv
 import gymnasium as gym
+import mujoco
 from shutil import copyfile
 import numpy as np
-from src.main import XML_PATH
+import torch
+import networkx as nx
 
 
 class MujocoParser:
     def __init__(self, **kwargs):
         self.__dict__.update((k, v) for k, v in kwargs.items())
 
-    def stuff(self):
         # Retrieve MuJoCo XML files for training
-        envs_train_names = []
-        morph_graphs = dict()
-
-        for morphology in self.env_name:
-            envs_train_names += [name[:-4] for name in os.listdir(XML_PATH) if '.xml' in name and morphology in name]
+        envs_train_names = self.env_name
+        self.morph_graphs = dict()
 
         for name in envs_train_names:
-            xml_path = os.path.join(XML_PATH, '{}.xml'.format(name))
-            morph_graphs[name] = MujocoGraph(xml_path).getGraphStructure
-
+            if name + '.xml' in os.listdir(self.xml_path):
+                xml_file = os.path.join(self.xml_path, '{}.xml'.format(name))
+                self.morph_graphs[name] = get_graph_structure(xml_file)
+            # else:
+            #     try:
+            #         env = gym.make(name)
+            #         model = env.unwrapped.model
+            #         xml_file = os.path.join(self.xml_path, '{}.xml'.format(name))
+            #         mujoco.mj_saveLastXML(xml_file, model)
+            #         self.morph_graphs[name] = get_graph_structure(xml_file)
+            #     except:
+            #         print(f'environment {name} could not be loaded')
         envs_train_names.sort()
 
         # sort envs acc to decreasing order of number of limbs (required due to issue in DummyVecEnv)
         order_idx = np.argsort([len(self.morph_graphs[env_name]) for env_name in envs_train_names])[::-1]
         envs_train_names = [envs_train_names[order] for order in order_idx]
 
-        print('Training envs: {}'.format(envs_train_names))
-        print('Population size: {}'.format(self.population_size))
-        print('Seed: {}\n'.format(self.cfg.seed))
-
         # Set up training env ================================================
-        self.limb_obs_size, self.max_action = register_envs(envs_train_names, self.max_episodic_timesteps)
-        self.cfg.limb_obs_size = self.limb_obs_size
+        self.limb_obs_size, self.max_action = self.register_envs(envs_train_names, self.max_episodic_timesteps)
 
-        self.cfg.max_num_limbs = self.max_num_limbs = max([len(self.morph_graphs[env_name])
-                                                           for env_name in envs_train_names])
+        self.max_num_limbs = max([len(self.morph_graphs[env_name]) for env_name in envs_train_names])
+
         # create vectorized training env
         obs_max_len = max([len(self.morph_graphs[env_name]) for env_name in envs_train_names]) * self.limb_obs_size
-        envs_train = [utils.makeEnvWrapper(name, obs_max_len, self.cfg.seed) for name in envs_train_names]
+        envs_train = [self.make_env_wrapper(name, obs_max_len, self.seed) for name in envs_train_names]
 
         self.envs_train = DummyVecEnv(envs_train)  # vectorized env (necessary for multiprocessing)
-        self.envs = Envs
-        self.envs.envs_train = self.envs_train
 
         # determine the maximum number of children in all the training envs
-        self.max_children = utils.findMaxChildren(envs_train_names, self.morph_graphs)
+        self.max_children = self.find_max_children(envs_train_names, self.morph_graphs)
 
-        self.cfg.morph_graphs = self.morph_graphs
+        # Get graph node features (distance from torso)
+        self.graph_n_feats = dict()
+        if self.enable_features:
+            node_feats_dim = 1  # adding only one feature (distance from torso)
+            for g_name, g_struct in self.morph_graphs.items():
+                edge_list = np.array([g_struct[1:], np.arange(1, len(g_struct))]).T.tolist()
+                g = nx.DiGraph(edge_list)
+                node_feats = (np.array([nx.shortest_path_length(g, 0, n_id) for n_id in range(len(g_struct))]
+                                       ).reshape(-1, 1))
+                self.graph_n_feats[g_name] = torch.tensor(node_feats, dtype=torch.long).view(-1, node_feats_dim)
+        else:
+            for env in envs_train_names:
+                self.graph_n_feats[env] = None
 
-
-class IdentityWrapper(gym.Wrapper):
-    """wrapper with useful attributes and helper functions"""
-
-    def __init__(self, env):
-        super(IdentityWrapper, self).__init__(env)
-        self.num_limbs = len(self.env.model.body_names[1:])
-        self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
-        self.max_action = float(self.env.action_space.high[0])
-
-
-class MujocoGraph:
-    def __init__(self, xml_file):
-        self.xml_file = xml_file
-
-    def get_graph_structure(self):
-        """Traverse the given xml file as a tree by pre-order and return the graph structure as a parents list"""
-
-        def preorder(b, parent_idx=-1):
-            self_idx = len(parents)
-            parents.append(parent_idx)
-            if 'body' not in b:
-                return
-            if not isinstance(b['body'], list):
-                b['body'] = [b['body']]
-            for branch in b['body']:
-                preorder(branch, self_idx)
-
-        with open(self.xml_file) as fd:
-            xml = xmltodict.parse(fd.read())
-        parents = []
-        try:
-            root = xml['mujoco']['worldbody']['body']
-            assert not isinstance(root, list), (
-                'worldbody can only contain one body (torso) for the current implementation, but found {}'.format(root))
-        except:
-            raise Exception("The given xml file does not follow the standard MuJoCo format.")
-        preorder(root)
-        # signal message flipping for flipped walker morphologies
-        if 'walker' in os.path.basename(self.xml_file) and 'flipped' in os.path.basename(self.xml_file):
-            parents[0] = -2
-        return parents
-
-    def get_graph_joints(self):
+    def register_envs(self, env_names, max_episode_steps, custom_xml=False):
         """
-        Traverse the given xml file as a tree by pre-order and return all the joints defined as a list of tuples
-        (body_name, joint_name1, ...) for each body
-        Used to match the order of joints defined in worldbody and joints defined in actuators
+        register the MuJoCo envs with Gym and return the per-limb observation size and max action value
+        (for modular policy training)
         """
+        # get all paths to xmls (handle the case where the given path is a directory containing multiple xml files)
+        paths_to_register = []
+        # existing envs
+        if not custom_xml:
+            for name in env_names:
+                paths_to_register.append(os.path.join(self.xml_path, "{}.xml".format(name)))
+        # custom envs
+        else:
+            if os.path.isfile(custom_xml):
+                paths_to_register.append(custom_xml)
+            elif os.path.isdir(custom_xml):
+                for name in sorted(os.listdir(custom_xml)):
+                    if '.xml' in name:
+                        paths_to_register.append(os.path.join(custom_xml, name))
+        # register each env
+        for xml in paths_to_register:
+            env_name = os.path.basename(xml)[:-4]
+            env_file = env_name
+            # create a copy of modular environment for custom xml model
+            if not os.path.exists(os.path.join(self.env_dir, '{}.py'.format(env_name))):
+                # create a duplicate of gym environment file for each env (necessary for avoiding bug in gym)
+                copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
+            params = {'xml': os.path.abspath(xml)}
+            # register with gym (check how it works)
+            register(id=("%s-v0" % env_name),
+                     max_episode_steps=max_episode_steps,
+                     entry_point="environments.%s:ModularEnv" % env_file,
+                     kwargs=params)
+            env = IdentityWrapper(gym.make("environments:%s-v0" % env_name))
+            # the following is the same for each env
+            limb_obs_size = env.limb_obs_size
+            max_action = env.max_action
+        return limb_obs_size, max_action
 
-        def preorder(b):
-            if 'joint' in b:
-                if isinstance(b['joint'], list) and b['@name'] != 'torso':
-                    raise Exception("The given xml file does not follow the standard MuJoCo format.")
-                elif not isinstance(b['joint'], list):
-                    b['joint'] = [b['joint']]
-                joints.append([b['@name']])
-                for j in b['joint']:
-                    joints[-1].append(j['@name'])
-            if 'body' not in b:
-                return
-            if not isinstance(b['body'], list):
-                b['body'] = [b['body']]
-            for branch in b['body']:
-                preorder(branch)
-
-        with open(self.xml_file) as fd:
-            xml = xmltodict.parse(fd.read())
-        joints = []
-        try:
-            root = xml['mujoco']['worldbody']['body']
-        except:
-            raise Exception("The given xml file does not follow the standard MuJoCo format.")
-        preorder(root)
-        return joints
-
-    def get_motor_joints(self):
-        """
-        Traverse the given xml file as a tree by pre-order and return the joint names in the order of defined actuators
-        Used to match the order of joints defined in worldbody and joints defined in actuators
-        """
-        with open(self.xml_file) as fd:
-            xml = xmltodict.parse(fd.read())
-        joints = []
-        motors = xml['mujoco']['actuator']['motor']
-        if not isinstance(motors, list):
-            motors = [motors]
-        for m in motors:
-            joints.append(m['@joint'])
-        return joints
-
-
-ENV_DIR = './environments'
-XML_DIR = './environments/assets'
-BASE_MODULAR_ENV_PATH = './environments/ModularEnv.py'
-DATA_DIR = './results'
-
-
-def register_envs(env_names, max_episode_steps, custom_xml):
-    """
-    register the MuJoCo envs with Gym and return the per-limb observation size and max action value
-    (for modular policy training)
-    """
-    # get all paths to xmls (handle the case where the given path is a directory containing multiple xml files)
-    paths_to_register = []
-    # existing envs
-    if not custom_xml:
+    @staticmethod
+    def find_max_children(env_names, graphs):
+        """return the maximum number of children given a list of env names and their corresponding graph structures"""
+        max_children = 0
         for name in env_names:
-            paths_to_register.append(os.path.join(XML_DIR, "{}.xml".format(name)))
-    # custom envs
-    else:
-        if os.path.isfile(custom_xml):
-            paths_to_register.append(custom_xml)
-        elif os.path.isdir(custom_xml):
-            for name in sorted(os.listdir(custom_xml)):
-                if '.xml' in name:
-                    paths_to_register.append(os.path.join(custom_xml, name))
-    # register each env
-    for xml in paths_to_register:
-        env_name = os.path.basename(xml)[:-4]
-        env_file = env_name
-        # create a copy of modular environment for custom xml model
-        if not os.path.exists(os.path.join(ENV_DIR, '{}.py'.format(env_name))):
-            # create a duplicate of gym environment file for each env (necessary for avoiding bug in gym)
-            copyfile(BASE_MODULAR_ENV_PATH, '{}.py'.format(os.path.join(ENV_DIR, env_name)))
-        params = {'xml': os.path.abspath(xml)}
-        # register with gym (check how it works)
-        register(id=("%s-v0" % env_name),
-                 max_episode_steps=max_episode_steps,
-                 entry_point="environments.%s:ModularEnv" % env_file,
-                 kwargs=params)
-        env = IdentityWrapper(gym.make("environments:%s-v0" % env_name))
-        # the following is the same for each env
-        limb_obs_size = env.limb_obs_size
-        max_action = env.max_action
-    return limb_obs_size, max_action
+            most_frequent = max(graphs[name], key=graphs[name].count)
+            max_children = max(max_children, graphs[name].count(most_frequent))
+        return max_children
+
+    @staticmethod
+    def make_env_wrapper(env_name, obs_max_len=None, seed=0):
+        """return wrapped gym environment for parallel sample collection (vectorized environments)"""
+
+        def helper():
+            e = gym.make("environments:%s-v0" % env_name, seed=seed)
+            return ModularEnvWrapper(e, obs_max_len)
+
+        return helper
 
 
 def quat2expmap(q):
@@ -207,7 +142,6 @@ def quat2expmap(q):
     """
     if np.abs(np.linalg.norm(q) - 1) > 1e-3:
         raise (ValueError, "quat2expmap: input quaternion is not norm 1")
-
     sinhalftheta = np.linalg.norm(q[1:])
     coshalftheta = q[0]
     r0 = np.divide(q[1:], (np.linalg.norm(q[1:]) + np.finfo(np.float32).eps))
@@ -218,3 +152,142 @@ def quat2expmap(q):
         r0 = -r0
     r = r0 * theta
     return r
+
+
+def get_graph_structure(xml_file):
+    """Traverse the given xml file as a tree by pre-order and return the graph structure as a parents list"""
+
+    def preorder(b, parent_idx=-1):
+        self_idx = len(parents)
+        parents.append(parent_idx)
+        if 'body' not in b:
+            return
+        if not isinstance(b['body'], list):
+            b['body'] = [b['body']]
+        for branch in b['body']:
+            preorder(branch, self_idx)
+
+    with open(xml_file) as fd:
+        xml = xmltodict.parse(fd.read())
+    parents = []
+    try:
+        root = xml['mujoco']['worldbody']['body']
+        assert not isinstance(root, list), (
+            'worldbody can only contain one body (torso) for the current implementation, but found {}'.format(root))
+    except:
+        raise Exception("The given xml file does not follow the standard MuJoCo format.")
+    preorder(root)
+    # signal message flipping for flipped walker morphologies
+    if 'walker' in os.path.basename(xml_file) and 'flipped' in os.path.basename(xml_file):
+        parents[0] = -2
+    return parents
+
+
+def get_graph_joints(xml_file):
+    """
+    Traverse the given xml file as a tree by pre-order and return all the joints defined as a list of tuples
+    (body_name, joint_name1, ...) for each body
+    Used to match the order of joints defined in worldbody and joints defined in actuators
+    """
+
+    def preorder(b):
+        if 'joint' in b:
+            if isinstance(b['joint'], list) and b['@name'] != 'torso':
+                raise Exception("The given xml file does not follow the standard MuJoCo format.")
+            elif not isinstance(b['joint'], list):
+                b['joint'] = [b['joint']]
+            joints.append([b['@name']])
+            for j in b['joint']:
+                joints[-1].append(j['@name'])
+        if 'body' not in b:
+            return
+        if not isinstance(b['body'], list):
+            b['body'] = [b['body']]
+        for branch in b['body']:
+            preorder(branch)
+
+    with open(xml_file) as fd:
+        xml = xmltodict.parse(fd.read())
+    joints = []
+    try:
+        root = xml['mujoco']['worldbody']['body']
+    except:
+        raise Exception("The given xml file does not follow the standard MuJoCo format.")
+    preorder(root)
+    return joints
+
+
+def get_motor_joints(xml_file):
+    """
+    Traverse the given xml file as a tree by pre-order and return the joint names in the order of defined actuators
+    Used to match the order of joints defined in worldbody and joints defined in actuators
+    """
+    with open(xml_file) as fd:
+        xml = xmltodict.parse(fd.read())
+    joints = []
+    motors = xml['mujoco']['actuator']['motor']
+    if not isinstance(motors, list):
+        motors = [motors]
+    for m in motors:
+        joints.append(m['@joint'])
+    return joints
+
+
+class IdentityWrapper(gym.Wrapper):
+    """wrapper with useful attributes and helper functions"""
+    def __init__(self, env):
+        super(IdentityWrapper, self).__init__(env)
+        self.num_limbs = self.env.unwrapped.model.nbody - 1
+        self.limb_obs_size = self.env.unwrapped.observation_space.shape[0] // self.num_limbs
+        self.max_action = float(self.env.unwrapped.action_space.high[0])
+
+
+class ModularEnvWrapper(gym.Wrapper):
+    """
+    Force env to return fixed shape obs when called .reset() and .step() and removes action's padding before execution
+    Also match the order of the actions returned by modular policy to the order of the environment actions
+    """
+    def __init__(self, env, obs_max_len=None):
+        super(ModularEnvWrapper, self).__init__(env)
+        # if no max length specified for obs, use the current env's obs size
+        if obs_max_len:
+            self.obs_max_len = obs_max_len
+        else:
+            self.obs_max_len = self.env.observation_space.shape[0]
+        self.action_len = self.env.action_space.shape[0]
+        self.num_limbs = self.env.unwrapped.model.nbody-1
+        self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
+        self.max_action = float(self.env.action_space.high[0])
+        self.xml = self.env.unwrapped.xml
+
+        # match the order of modular policy actions to the order of environment actions
+        self.motors = get_motor_joints(self.xml)
+        self.joints = get_graph_joints(self.xml)
+        self.action_order = [-1] * self.num_limbs
+        for i in range(len(self.joints)):
+            assert sum([j in self.motors for j in
+                        self.joints[i][1:]]) <= 1, 'Modular policy does not support two motors per body'
+            for j in self.joints[i]:
+                if j in self.motors:
+                    self.action_order[i] = self.motors.index(j)
+                    break
+
+    def step(self, action):
+        # clip the 0-padding before processing
+        action = action[:self.num_limbs]
+        # match the order of the environment actions
+        env_action = [None for i in range(len(self.motors))]
+        for i in range(len(action)):  # remove non-motor actions (e.g. torso)
+            env_action[self.action_order[i]] = action[i]
+        obs, reward, done, info = self.env.step(env_action)
+        assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
+            len(obs), self.obs_max_len)
+        obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
+        return obs, reward, done, info
+
+    def reset(self):
+        obs = self.env.reset()
+        assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
+            len(obs), self.obs_max_len)
+        obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
+        return obs

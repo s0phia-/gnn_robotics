@@ -2,12 +2,12 @@ import yaml
 import torch
 from argparse import ArgumentParser
 import os
-from src.environments.mujoco_utils import MujocoGraph
+from src.environments.mujoco_utils import MujocoParser
 import gymnasium as gym
 from src.agents.function_approximators import MessagePassingGNN
 from src.agents.ppo import PPO
 
-XML_PATH = 'environments/assets'
+
 
 def main(hyperparams):
 
@@ -21,6 +21,9 @@ def main(hyperparams):
     for k, v in vars(hyperparams).items():
         if v is not None:
             hparam[k] = v
+
+    x = MujocoParser(**hparam)
+    print(x.envs_train.action_space)
 
     # ### testing GNN ###
     # num_nodes = 10

@@ -1,7 +1,9 @@
 #env params
-env_name: Ant-v5,
+env_name:
+  - ant
 max_episodic_timesteps: 1000
 population_size: 8
+enable_features: True
 
 #PPO params
 lr: 3e-4
@@ -22,4 +24,10 @@ seed: 69
 
 #boring params
 save_model_freq: 10
+
+#paths
+xml_path: 'environments/assets'
+env_dir: './environments'
+base_modular_env_path: './environments/ModularEnv.py'
+data_dir: './results'
 
