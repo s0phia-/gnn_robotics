@@ -1,7 +1,7 @@
 import yaml
 import torch
 from argparse import ArgumentParser
-import os
+from time import sleep
 from src.environments.mujoco_parser import MujocoParser
 import gymnasium as gym
 from src.agents.function_approximators import MessagePassingGNN
@@ -23,11 +23,31 @@ def main(hyperparams):
             hparam[k] = v
 
     envs = MujocoParser(**hparam).envs_train
+
+    def get_action_joint_mapping(model):
+        """Return a mapping from action indices to joint names"""
+        mapping = {}
+
+        # Get names using the generic id2name function instead
+        for i in range(model.nu):  # nu is the number of actuators
+            actuator_id = i
+            # Get the joint ID that this actuator controls
+            joint_id = model.actuator_trnid[actuator_id, 0]
+
+            # Use the generic id2name function with 'joint' type
+            try:
+                joint_name = model.id2name(joint_id, 'joint')
+                mapping[i] = joint_name
+            except Exception as e:
+                # Fallback if id2name doesn't work
+                mapping[i] = f"joint_{joint_id}"
+        print(mapping)
+        return mapping
+
     # num_actions = int(envs.action_space.shape)
     for env in envs:
-        print(env)
         env.reset()
-        env.render()
+        get_action_joint_mapping(env.unwrapped.model)
 
     ### testing PPO ###
     # actor = MessagePassingGNN(in_dim=9, out_dim=8, env=envs[0], device=device, **hparam)

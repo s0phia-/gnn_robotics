@@ -125,7 +125,9 @@ class MujocoParser:
         #     return ModularEnvWrapper(e, obs_max_len)
 
         e = gym.make("environments:%s-v0" % env_name, seed=seed, render_mode='human')
+        e.reset()
         e = ModularEnvWrapper(e, obs_max_len)
+        # e.unwrapped.setup_camera()
 
         return e  #helper
 
@@ -261,27 +263,25 @@ class ModularEnvWrapper(gym.Wrapper):
         self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.action_space.high[0])
         self.xml = self.env.unwrapped.xml
+        self.model = env.unwrapped.model
 
-        # match the order of modular policy actions to the order of environment actions
-        self.motors = get_motor_joints(self.xml)
-        self.joints = get_graph_joints(self.xml)
-        self.action_order = [-1] * self.num_limbs
-        for i in range(len(self.joints)):
-            assert sum([j in self.motors for j in
-                        self.joints[i][1:]]) <= 1, 'Modular policy does not support two motors per body'
-            for j in self.joints[i]:
-                if j in self.motors:
-                    self.action_order[i] = self.motors.index(j)
-                    break
+        self.action_mapping = self.initialize_action_mapping()
+
+    def initialize_action_mapping(self):
+        mapping = []
+        for i in range(self.model.nu):  # nu is the number of actuators
+            joint_id = self.model.actuator_trnid[i, 0]
+            mapping.append(joint_id)
+        return mapping
 
     def step(self, action):
-        # clip the 0-padding before processing
-        action = action[:self.num_limbs]
-        # match the order of the environment actions
-        env_action = [None for i in range(len(self.motors))]
-        for i in range(len(action)):  # remove non-motor actions (e.g. torso)
-            env_action[self.action_order[i]] = action[i]
-        obs, reward, done, info = self.env.step(env_action)
+        action = action[:self.num_limbs] # clip the 0-padding before processing
+        reordered_action = np.zeros_like(action)
+        for logical_idx, env_idx in self.action_mapping.items():
+            if logical_idx < len(action):
+                reordered_action[env_idx] = action[logical_idx]
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        done = terminated or truncated
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
@@ -293,3 +293,4 @@ class ModularEnvWrapper(gym.Wrapper):
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
         return obs
+

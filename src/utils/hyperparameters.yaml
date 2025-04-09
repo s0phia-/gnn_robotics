@@ -20,7 +20,7 @@ decoder_and_message_layers: 2
 decoder_and_message_hidden_dim: 64  # 128, 256
 
 #misc params
-seed: 69
+seed: 6
 
 #boring params
 save_model_freq: 10
