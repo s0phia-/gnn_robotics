@@ -5,7 +5,7 @@
 import numpy as np
 from gymnasium import utils
 from gymnasium.envs.mujoco import mujoco_env
-from src.environments.mujoco_utils import quat2expmap
+from src.environments.mujoco_parser import quat2expmap
 from gymnasium.spaces import Box
 
 

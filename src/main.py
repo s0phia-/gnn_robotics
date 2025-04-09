@@ -2,7 +2,7 @@ import yaml
 import torch
 from argparse import ArgumentParser
 import os
-from src.environments.mujoco_utils import MujocoParser
+from src.environments.mujoco_parser import MujocoParser
 import gymnasium as gym
 from src.agents.function_approximators import MessagePassingGNN
 from src.agents.ppo import PPO
