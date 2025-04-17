@@ -1,9 +1,8 @@
 import yaml
 import torch
 from argparse import ArgumentParser
-from time import sleep
+from src.utils.misc_utils import create_edges, create_actuator_mapping
 from src.environments.mujoco_parser import MujocoParser
-import gymnasium as gym
 from src.agents.function_approximators import MessagePassingGNN
 from src.agents.ppo import PPO
 
@@ -24,23 +23,15 @@ def main(hyperparams):
 
     envs = MujocoParser(**hparam).envs_train
 
-    # num_actions = int(envs.action_space.shape)
-
     for env in envs:
+        edges = create_edges(env)
+        actuator_mapping = create_actuator_mapping(env)
         env.reset()
-        for _ in range(100):
-            env.reset()
-            action = env.unwrapped.action_space.sample()
-            obs, _, _, _ = env.step(action)
-            print(obs)
-            sleep(0.1)
-
-    ### testing PPO ###
-    # actor = MessagePassingGNN(in_dim=35, out_dim=8, env=envs[0], device=device, **hparam)
-    # model = PPO(device, actor, **hparam)
-    # model.learn()
-
-
+        actor = MessagePassingGNN(in_dim=15, num_nodes=9, edge_index=edges, actuator_mapping=actuator_mapping,
+                                  device=device, **hparam)
+        model = PPO(actor=actor, device=device, env=env, **hparam)
+        model.learn()
+        model.demo()
 
 
 if __name__ == '__main__':
