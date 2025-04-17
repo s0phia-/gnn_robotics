@@ -22,6 +22,7 @@ class PPO:
 
         # set up environment
         self.env = env
+        self.device = device
         self.obs_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
 
@@ -102,12 +103,14 @@ class PPO:
         t = 0
         while t < self.timesteps_per_batch:
             episode_rewards = []
-            obs, _ = self.env.reset()
+            obs = self.env.reset()
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
             for ep_t in range(self.max_episodic_timesteps):
                 t += 1
                 batch_observations.append(obs)
                 action, log_prob = self.get_action(obs, calculate_log_probs=True)
                 obs, reward, terminated, truncated, _ = self.env.step(action)
+                obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
                 batch_actions.append(action)
                 batch_log_probs.append(log_prob)
                 episode_rewards.append(reward)
@@ -176,3 +179,12 @@ class PPO:
         dist = MultivariateNormal(self.actor(obs), self.cov_mat)
         log_probs = dist.log_prob(actions)
         return log_probs
+
+    def demo(self):
+        env = self.env
+        obs = env.reset()
+        for _ in range(100):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+            action = self.get_action(obs)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            env.render()
