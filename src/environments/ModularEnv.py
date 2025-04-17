@@ -91,28 +91,3 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def render(self):
         return super().render()
-
-    # def viewer_setup(self):
-    #     self.viewer.cam.trackbodyid = 0
-    #     self.viewer.cam.distance = self.model.stat.extent * 1.5
-    #     self.viewer.cam.lookat[2] = 1.15
-    #     self.viewer.cam.elevation = -20
-
-    # def setup_camera(self):
-    #     """Setup camera after ensuring viewer is initialized"""
-    #     # Force render to initialize viewer if needed
-    #     if self.render_mode == "human":
-    #         self.render()
-    #
-    #     # Check if viewer exists now
-    #     if hasattr(self, "viewer") and self.viewer is not None:
-    #         self.viewer.cam.trackbodyid = 0
-    #         self.viewer.cam.distance = 10.0
-    #         self.viewer.cam.lookat[0] = 0
-    #         self.viewer.cam.lookat[1] = 0
-    #         self.viewer.cam.lookat[2] = 0.5
-    #         self.viewer.cam.elevation = -30
-    #         self.viewer.cam.azimuth = 0
-    #         print("Camera settings applied successfully")
-    #     else:
-    #         print("Failed to initialize viewer")

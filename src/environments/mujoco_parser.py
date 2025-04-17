@@ -268,10 +268,11 @@ class ModularEnvWrapper(gym.Wrapper):
         self.action_mapping = self.initialize_action_mapping()
 
     def initialize_action_mapping(self):
-        mapping = []
+        mapping = {}
         for i in range(self.model.nu):  # nu is the number of actuators
-            joint_id = self.model.actuator_trnid[i, 0]
-            mapping.append(joint_id)
+            actuator_id = i
+            joint_id = self.model.actuator_trnid[actuator_id, 0]
+            mapping[i] = joint_id - 1
         return mapping
 
     def step(self, action):
