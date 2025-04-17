@@ -286,7 +286,7 @@ class ModularEnvWrapper(gym.Wrapper):
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        return obs, reward, done, info
+        return obs, reward, done, False, info
 
     def reset(self, seed=None):
         obs = self.env.reset(seed=seed)[0]
