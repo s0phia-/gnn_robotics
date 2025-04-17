@@ -1,3 +1,4 @@
+from typing import Callable
 import torch
 import numpy as np
 import torch.nn as nn
@@ -97,7 +98,9 @@ class Decoder(nn.Module):
 class MessagePassingGNN(nn.Module):
     def __init__(self,
                  in_dim: int,
-                 out_dim: int,
+                 num_nodes: int,
+                 edge_index: torch.Tensor,
+                 actuator_mapping: Callable,
                  device: torch.device,
                  **kwargs
                  ):
@@ -109,7 +112,10 @@ class MessagePassingGNN(nn.Module):
         """
         super().__init__()
         self.__dict__.update((k, v) for k, v in kwargs.items())
-        self.propagation_steps = self.propagation_steps
+        self.actuator_mapping = actuator_mapping
+        self.num_nodes = num_nodes
+        self.node_feature_dim = in_dim
+        self.register_buffer('edge_index', edge_index)
 
         self.encoder = Encoder(in_dim=in_dim,
                                hidden_dim=self.hidden_node_dim,
@@ -123,18 +129,46 @@ class MessagePassingGNN(nn.Module):
                                           hidden_layers=self.decoder_and_message_layers,
                                           device=device))
 
-        self.decoder = Decoder(out_dim=out_dim,
+        self.decoder = Decoder(out_dim=1,
                                in_dim=self.hidden_node_dim,
                                hidden_dim=self.decoder_and_message_hidden_dim,
                                hidden_layers=self.decoder_and_message_layers,
                                device=device).to(device)
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
+    def forward(self, x: torch.Tensor):
+        batch_size = 1
+        if x.dim() > 1:
+            batch_size = x.size(0)
+            x = x.view(batch_size, self.num_nodes, self.node_feature_dim)
+            x = x.reshape(batch_size * self.num_nodes, self.node_feature_dim)
+        else:
+            x = x.view(self.num_nodes, self.node_feature_dim)
+
         x = self.encoder(x=x)
+
+        if batch_size > 1:
+            edge_indices_batched = []
+            for i in range(batch_size):
+                offset = i * self.num_nodes
+                edge_indices_batched.append(self.edge_index + offset)
+            batched_edge_index = torch.cat(edge_indices_batched, dim=1)
+        else:
+            batched_edge_index = self.edge_index
+
         for i in range(self.propagation_steps):
-            x = self.middle[i](x=x, edge_index=edge_index)
+            x = self.middle[i](x=x, edge_index=batched_edge_index)
+
         x = self.decoder(x=x)
-        return x
+        x = x.squeeze(-1)
+
+        if batch_size > 1:
+            x = x.view(batch_size, self.num_nodes)
+            actuator_outputs = []
+            for i in range(batch_size):
+                actuator_outputs.append(self.actuator_mapping(x[i]))
+            return torch.stack(actuator_outputs)
+        else:
+            return self.actuator_mapping(x)
 
 
 class FeedForward(nn.Module):
