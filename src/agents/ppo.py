@@ -1,6 +1,6 @@
 from src.utils.logger_config import get_logger
-logger = get_logger()
 import numpy as np
+import os
 import torch
 import torch.nn as nn
 from torch.optim import Adam
@@ -38,16 +38,28 @@ class PPO:
         # initialise covariance matrix
         self.cov_mat = torch.eye(self.action_dim) * 0.5
 
+        # set up file paths
+        self.results_dir = f"{self.run_dir}/results/"
+        os.makedirs(self.results_dir, exist_ok=True)
+        self.checkpoint_dir = f"{self.run_dir}/checkpoints/{self.run_id}"
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        self.logger = get_logger(run_id=self.run_id, run_dir=self.run_dir)
+
     def learn(self):
         """
         PPO learning step. Nice description and pseudocode: https://spinningup.openai.com/en/latest/algorithms/ppo.html
         """
-        iters = 0
+        iters = int(0)
         t = 0
+        rewards_history = []
         while t < int(self.total_timesteps):
 
             # perform a rollout
-            batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens = self.rollout()
+            batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
+
+            # Calculate average reward per episode in this batch
+            avg_ep_reward = sum([sum(ep_rewards) for ep_rewards in batch_rewards]) / len(batch_rewards)
+            rewards_history.append([iters, avg_ep_reward])
 
             # keep track of time!
             t += self.timesteps_per_batch
@@ -80,10 +92,14 @@ class PPO:
                 critic_loss.backward()
                 self.critic_optim.step()
 
-            logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
+            self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
-                torch.save(self.actor.state_dict(), f'./../checkpoints_{self.run_id}/ppo_actor.pth')
-                torch.save(self.critic.state_dict(), f'./../checkpoints_{self.run_id}/ppo_critic.pth')
+                # track rewards
+                np.savetxt(f"{self.results_dir}/rewards_{self.run_id}.csv", rewards_history,
+                           delimiter=',', header='iteration,reward', comments='')
+                # save model
+                torch.save(self.actor.state_dict(), f"{self.checkpoint_dir}/ppo_actor.pth")
+                torch.save(self.critic.state_dict(), f"{self.checkpoint_dir}/ppo_critic.pth")
 
     def rollout(self):
         """
@@ -126,7 +142,7 @@ class PPO:
         batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
         batch_rewards_to_gos = self.get_reward_to_go(batch_rewards)
 
-        return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens
+        return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens, batch_rewards
 
     def get_action(self, obs, calculate_log_probs=False):
         """
