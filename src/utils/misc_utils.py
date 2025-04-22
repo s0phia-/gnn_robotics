@@ -1,4 +1,6 @@
 import torch
+import os
+import datetime
 import yaml
 import itertools
 from copy import deepcopy
@@ -42,6 +44,14 @@ def load_hparams(yaml_hparam_path):
     """
     :param yaml_hparam_path: path to YAML hyperparameters
     """
+    run_dir = f"../runs/run_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}"
+    os.makedirs(run_dir, exist_ok=True)
+
+    # Create the directory structure
+    os.makedirs(f"{run_dir}/logs", exist_ok=True)
+    os.makedirs(f"{run_dir}/checkpoints", exist_ok=True)
+    os.makedirs(f"{run_dir}/results", exist_ok=True)
+
     with open(yaml_hparam_path, 'r') as f:
         hparam = yaml.safe_load(f)
     test_params = {k: v for k, v in hparam.items() if isinstance(v, list) and len(v) > 1}
@@ -57,6 +67,6 @@ def load_hparams(yaml_hparam_path):
             hparams[param_name] = combination[i]
         run_id = "_".join([f"{param_name}-{combination[i]}" for i, param_name in enumerate(param_names)])
         hparams['run_id'] = run_id
+        hparams['run_dir'] = run_dir
         all_combinations.append(hparams)
-
     return all_combinations
