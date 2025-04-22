@@ -7,7 +7,6 @@ import os
 from gymnasium.envs.registration import register
 from stable_baselines3.common.vec_env import DummyVecEnv
 import gymnasium as gym
-import mujoco
 from shutil import copyfile
 import numpy as np
 import torch
