@@ -5,7 +5,7 @@ from src.environments.mujoco_parser import MujocoParser
 from src.agents.function_approximators import MessagePassingGNN
 from src.agents.ppo import PPO
 from src.utils.logger_config import set_run_id, get_logger
-from src.utils.analyse_data import plot_rewards_from_folder
+from src.utils.analyse_data import plot_rewards_with_seeds
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -29,9 +29,9 @@ def run(hparam):
 
 if __name__ == '__main__':
 
-    hparams = load_hparams('utils/hyperparameters.yaml')
+    hparams = load_hparams('utils/hyperparameters.yaml', num_seeds=5)
     pool = mp.Pool(processes=min(mp.cpu_count(), len(hparams)))
     results = pool.map(run, hparams)
     pool.close()
     pool.join()
-    plot_rewards_from_folder(f'../../runs/{hparams['run_dir']}/results')
+    plot_rewards_with_seeds(f'../../runs/{hparams['run_dir']}/results')
