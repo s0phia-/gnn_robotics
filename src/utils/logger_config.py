@@ -1,6 +1,6 @@
-# In src/utils/logger_config.py
 import logging
 import os
+
 
 # Keep track of run_id across modules
 _current_run_id = None
@@ -11,26 +11,40 @@ def set_run_id(run_id):
     _current_run_id = run_id
 
 
-def get_logger():
-    # Create logs directory if it doesn't exist
-    os.makedirs("../logs", exist_ok=True)
+def get_logger(run_id=None, run_dir=None):
+    if run_dir and run_id:
+        # Create logs directory within the run directory
+        log_dir = f"{run_dir}/logs"
+        os.makedirs(log_dir, exist_ok=True)
 
-    # Use the current run_id
-    global _current_run_id
-    run_id = _current_run_id
+        # Name the log file based on run_id
+        filename = f"{log_dir}/{run_id}.log"
 
-    # Name the log file based on run_id or use default
-    filename = f"../logs/{run_id}.log" if run_id else "../logger.log"
+        # Get a logger with the run_id as name
+        logger = logging.getLogger(str(run_id))
 
-    # Get a logger with the run_id as name
-    logger = logging.getLogger(str(run_id))
+        # Avoid adding handlers if this logger already has them
+        if not logger.handlers:
+            # Set level
+            logger.setLevel(logging.DEBUG)
 
-    # Configure the logger if it hasn't been configured yet
-    if not logger.handlers:
-        logger.setLevel(logging.DEBUG)
-        file_handler = logging.FileHandler(filename, mode='w')
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+            # Create file handler
+            file_handler = logging.FileHandler(filename, mode='w')
+
+            # Create formatter
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            file_handler.setFormatter(formatter)
+
+            # Add handler to logger
+            logger.addHandler(file_handler)
+    else:
+        # Fallback to default logger
+        logger = logging.getLogger("default")
+        if not logger.handlers:
+            logger.setLevel(logging.DEBUG)
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
 
     return logger
