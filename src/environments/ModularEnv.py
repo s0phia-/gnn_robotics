@@ -10,18 +10,19 @@ from gymnasium.spaces import Box
 
 
 class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    render_mode = None
     metadata = {
         "render_modes": ["human", "rgb_array", "depth_array"],
         "render_fps": 25,
     }
+
     def __init__(self, xml, seed=None, **kwargs):
         self.xml = xml
         render_mode = kwargs.get('render_mode', None)
+        self._desired_render_mode = render_mode
         mujoco_env.MujocoEnv.__init__(self, model_path=xml,
                                       frame_skip=4,
                                       observation_space=Box(low=-np.inf, high=np.inf, shape=(135,), dtype=float),
-                                      render_mode=render_mode,)
+                                      render_mode=None, )
         utils.EzPickle.__init__(self)
         if seed is not None:
             self.reset(seed=seed)
@@ -94,4 +95,21 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return self._get_obs()
 
     def render(self):
+        if hasattr(self, 'mujoco_renderer'):
+            # Enable the stored render mode when explicitly called
+            if self._desired_render_mode is not None and self.render_mode != self._desired_render_mode:
+                self.render_mode = self._desired_render_mode
+                self.mujoco_renderer.render_mode = self._desired_render_mode
+
+            # Make camera follow the agent
+            if self.mujoco_renderer.viewer is not None:
+                # Get torso position
+                torso_id = self.data.body("torso").id
+                torso_pos = self.data.xpos[torso_id]
+
+                # Set camera to follow torso
+                self.mujoco_renderer.viewer.cam.lookat[0] = torso_pos[0]
+                self.mujoco_renderer.viewer.cam.lookat[1] = torso_pos[1]
+                self.mujoco_renderer.viewer.cam.lookat[2] = torso_pos[2]
+
         return super().render()

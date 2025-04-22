@@ -19,22 +19,13 @@ class MujocoParser:
         self.__dict__.update((k, v) for k, v in kwargs.items())
 
         # Retrieve MuJoCo XML files for training
-        envs_train_names = self.env_name
+        envs_train_names = [self.env_name]
         self.morph_graphs = dict()
 
         for name in envs_train_names:
             if name + '.xml' in os.listdir(self.xml_path):
                 xml_file = os.path.join(self.xml_path, '{}.xml'.format(name))
                 self.morph_graphs[name] = get_graph_structure(xml_file)
-            # else:
-            #     try:
-            #         env = gym.make(name)
-            #         model = env.unwrapped.model
-            #         xml_file = os.path.join(self.xml_path, '{}.xml'.format(name))
-            #         mujoco.mj_saveLastXML(xml_file, model)
-            #         self.morph_graphs[name] = get_graph_structure(xml_file)
-            #     except:
-            #         print(f'environment {name} could not be loaded')
         envs_train_names.sort()
 
         # sort envs acc to decreasing order of number of limbs (required due to issue in DummyVecEnv)
@@ -119,17 +110,10 @@ class MujocoParser:
     @staticmethod
     def make_env_wrapper(env_name, obs_max_len=None, seed=0):
         """return wrapped gym environment for parallel sample collection (vectorized environments)"""
-
-        # def helper():
-        #     e = gym.make("environments:%s-v0" % env_name, seed=seed, render_mode='human')
-        #     return ModularEnvWrapper(e, obs_max_len)
-
         e = gym.make("environments:%s-v0" % env_name, seed=seed, render_mode='human')
         e.reset()
         e = ModularEnvWrapper(e, obs_max_len)
-        # e.unwrapped.setup_camera()
-
-        return e  #helper
+        return e
 
 
 def quat2expmap(q):

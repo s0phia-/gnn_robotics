@@ -1,11 +1,12 @@
-from src.utils.logger_config import logger
+from src.utils.logger_config import get_logger
+logger = get_logger()
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
-import gymnasium as gym
-from src.agents.function_approximators import FeedForward, MessagePassingGNN
+from time import sleep
+from src.agents.function_approximators import FeedForward
 
 
 class PPO:
@@ -81,8 +82,8 @@ class PPO:
 
             logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
-                torch.save(self.actor.state_dict(), './../checkpoints/ppo_actor.pth')
-                torch.save(self.critic.state_dict(), './../checkpoints/ppo_critic.pth')
+                torch.save(self.actor.state_dict(), f'./../checkpoints_{self.run_id}/ppo_actor.pth')
+                torch.save(self.critic.state_dict(), f'./../checkpoints_{self.run_id}/ppo_critic.pth')
 
     def rollout(self):
         """
@@ -181,6 +182,10 @@ class PPO:
         return log_probs
 
     def demo(self):
+        self.actor.load_state_dict(torch.load('./../checkpoints/ppo_actor.pth'))
+        self.critic.load_state_dict(torch.load('./../checkpoints/ppo_critic.pth'))
+        self.actor.eval()
+        self.critic.eval()
         env = self.env
         obs = env.reset()
         for _ in range(100):
@@ -188,3 +193,4 @@ class PPO:
             action = self.get_action(obs)
             obs, reward, terminated, truncated, _ = env.step(action)
             env.render()
+            sleep(.1)

@@ -1,5 +1,9 @@
 import torch
+import yaml
+import itertools
+from copy import deepcopy
 from src.environments.mujoco_parser import get_graph_structure, get_graph_joints, get_motor_joints
+
 
 
 def create_edges(env):
@@ -32,3 +36,27 @@ def create_actuator_mapping(env):
         return actuator_actions
 
     return actuator_mapping
+
+
+def load_hparams(yaml_hparam_path):
+    """
+    :param yaml_hparam_path: path to YAML hyperparameters
+    """
+    with open(yaml_hparam_path, 'r') as f:
+        hparam = yaml.safe_load(f)
+    test_params = {k: v for k, v in hparam.items() if isinstance(v, list) and len(v) > 1}
+    base_params = {k: v[0] if isinstance(v, list) and len(v) == 1 else v
+                   for k, v in hparam.items() if k not in test_params}
+    param_names = list(test_params.keys())
+    param_values = list(test_params.values())
+    all_combinations = []
+
+    for combination in itertools.product(*param_values):
+        hparams = deepcopy(base_params)
+        for i, param_name in enumerate(param_names):
+            hparams[param_name] = combination[i]
+        run_id = "_".join([f"{param_name}-{combination[i]}" for i, param_name in enumerate(param_names)])
+        hparams['run_id'] = run_id
+        all_combinations.append(hparams)
+
+    return all_combinations
