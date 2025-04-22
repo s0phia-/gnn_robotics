@@ -33,6 +33,8 @@ def plot_reward_data(data_dict, save_path=None):
     plt.title('Training Rewards Over Time')
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
+    ax = plt.gca()
+    ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=300)
@@ -43,6 +45,3 @@ def plot_rewards_from_folder(results_folder, save_path=None):
     """Main function to read and plot reward data"""
     data_dict = collect_data_from_folder(results_folder)
     plot_reward_data(data_dict, save_path)
-
-# Example usage
-plot_rewards_from_folder('../../runs/run_20250422_163239/results')
