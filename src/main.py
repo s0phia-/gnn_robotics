@@ -1,7 +1,7 @@
 import torch
 import multiprocessing as mp
-from src.utils.misc_utils import create_edges, create_actuator_mapping, load_hparams
-from src.environments.mujoco_parser import MujocoParser
+from src.utils.misc_utils import  load_hparams
+from src.environments.mujoco_parser import MujocoParser, create_edges, create_actuator_mapping
 from src.agents.function_approximators import MessagePassingGNN
 from src.agents.ppo import PPO
 from src.utils.logger_config import set_run_id, get_logger
