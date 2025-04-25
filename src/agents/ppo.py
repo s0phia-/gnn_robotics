@@ -197,9 +197,9 @@ class PPO:
         log_probs = dist.log_prob(actions)
         return log_probs
 
-    def demo(self):
-        self.actor.load_state_dict(torch.load('./../checkpoints/ppo_actor.pth'))
-        self.critic.load_state_dict(torch.load('./../checkpoints/ppo_critic.pth'))
+    def demo(self, actor_path, critic_path):
+        self.actor.load_state_dict(torch.load(actor_path))
+        self.critic.load_state_dict(torch.load(critic_path))
         self.actor.eval()
         self.critic.eval()
         env = self.env
