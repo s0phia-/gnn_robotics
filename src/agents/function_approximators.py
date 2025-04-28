@@ -171,6 +171,96 @@ class MessagePassingGNN(nn.Module):
             return self.actuator_mapping(x)
 
 
+class MultiEdgeGGNN_layer(GGNN_layer):
+    def __init__(self, in_dim, out_dim, hidden_dim, hidden_layers, device):
+        super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device)
+
+        # Add a separate message function for global edges
+        self.global_message_layers = [nn.Linear(in_dim * 2, hidden_dim, device=device), nn.Tanh()]
+        for _ in range(hidden_layers - 1):
+            self.global_message_layers.append(nn.Linear(hidden_dim, hidden_dim, device=device))
+            self.global_message_layers.append(nn.Tanh())
+        self.global_message_layers.append(nn.Linear(hidden_dim, out_dim, device=device))
+        self.global_message_function = nn.Sequential(*self.global_message_layers)
+
+    def message(self, x_i, x_j, edge_type=None):
+        msg = torch.cat([x_i, x_j], dim=-1)
+        # Use appropriate message function based on edge type
+        global_msg = self.global_message_function(msg)
+        orig_msg = self.message_function(msg)
+        # Select messages based on edge type
+        mask_global = (edge_type == 1).view(-1, 1)
+        mask_orig = (edge_type == 0).view(-1, 1)
+        return mask_orig * orig_msg + mask_global * global_msg
+
+
+class MultiEdgeTypeGNN(MessagePassingGNN):
+    def __init__(self, in_dim, num_nodes, edge_index, actuator_mapping, device, **kwargs):
+        super().__init__(in_dim, num_nodes, edge_index, actuator_mapping, device, **kwargs)
+
+        # Create fully connected edges
+        fc_edges = self._create_fully_connected_edges(num_nodes).to(device)
+        self.register_buffer('fc_edge_index', fc_edges)
+
+        # Replace middle layers with multi-edge version
+        self.middle = nn.ModuleList()
+        for _ in range(self.propagation_steps):
+            self.middle.append(MultiEdgeGGNN_layer(
+                in_dim=self.hidden_node_dim,
+                out_dim=self.hidden_node_dim,
+                hidden_dim=self.decoder_and_message_hidden_dim,
+                hidden_layers=self.decoder_and_message_layers,
+                device=device
+            ))
+
+    def _create_fully_connected_edges(self, num_nodes):
+        rows, cols = [], []
+        for i in range(num_nodes):
+            for j in range(num_nodes):
+                if i != j:  # Exclude self-loops
+                    rows.append(i)
+                    cols.append(j)
+        return torch.tensor([rows, cols], dtype=torch.long)
+
+    def forward(self, x):
+        batch_size = 1
+        if x.dim() > 1:
+            batch_size = x.size(0)
+            x = x.view(batch_size, self.num_nodes, self.node_feature_dim)
+            x = x.reshape(batch_size * self.num_nodes, self.node_feature_dim)
+        else:
+            x = x.view(self.num_nodes, self.node_feature_dim)
+
+        x = self.encoder(x=x)
+
+        if batch_size > 1:
+            orig_edges_batched = [self.edge_index + i * self.num_nodes for i in range(batch_size)]
+            orig_edge_index = torch.cat(orig_edges_batched, dim=1)
+            fc_edges_batched = [self.fc_edge_index + i * self.num_nodes for i in range(batch_size)]
+            fc_edge_index = torch.cat(fc_edges_batched, dim=1)
+        else:
+            orig_edge_index = self.edge_index
+            fc_edge_index = self.fc_edge_index
+
+        combined_edge_index = torch.cat([orig_edge_index, fc_edge_index], dim=1)
+        edge_type = torch.cat([
+            torch.zeros(orig_edge_index.size(1), device=x.device),
+            torch.ones(fc_edge_index.size(1), device=x.device)
+        ])
+
+        for i in range(self.propagation_steps):
+            x = self.middle[i](x=x, edge_index=combined_edge_index, edge_type=edge_type)
+
+        x = self.decoder(x=x)
+        x = x.squeeze(-1)
+
+        if batch_size > 1:
+            x = x.view(batch_size, self.num_nodes)
+            return torch.stack([self.actuator_mapping(x[i]) for i in range(batch_size)])
+        else:
+            return self.actuator_mapping(x)
+
+
 class FeedForward(nn.Module):
     def __init__(self,
                  in_dim: int,
