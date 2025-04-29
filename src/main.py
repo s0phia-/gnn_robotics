@@ -37,11 +37,10 @@ def view_model_demo(model_path, hparam):
 
 
 if __name__ == '__main__':
-    # hparams = load_hparams('utils/hyperparameters.yaml', num_seeds=3)
-    # pool = mp.Pool(processes=min(mp.cpu_count(), len(hparams)))
-    # results = pool.map(run, hparams)
-    # pool.close()
-    # pool.join()
-    # plot_rewards_with_seeds(f'../runs/{hparams[0]['run_id']}/results', hparams)
-    plot_rewards_with_seeds('../runs/nervenet_two_messages/results')
-    # view_model_demo(f'../runs/nervenet_two_messages/checkpoints/propagation_steps-4_seed-6', hparams[0])
+    hparams = load_hparams('utils/hyperparameters.yaml', num_seeds=1)
+    pool = mp.Pool(processes=min(mp.cpu_count(), len(hparams)))
+    results = pool.map(run, hparams)
+    pool.close()
+    pool.join()
+    plot_rewards_with_seeds(f'../runs/{hparams[0]['run_id']}/results', hparams)
+    view_model_demo(f'../runs/{hparams[0]['run_id']}/checkpoints/propagation_steps-4_seed-6', hparams[0])
