@@ -95,7 +95,7 @@ class PPO:
             self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
                 # track rewards
-                np.savetxt(f"{self.results_dir}/rewards_{self.run_id}.csv", rewards_history,
+                np.savetxt(f"{self.results_dir}/{self.run_id}.csv", rewards_history,
                            delimiter=',', header='iteration,reward', comments='')
                 # save model
                 torch.save(self.actor.state_dict(), f"{self.checkpoint_dir}/ppo_actor.pth")

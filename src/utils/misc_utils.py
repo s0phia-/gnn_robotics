@@ -36,7 +36,7 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
             for i, param_name in enumerate(param_names):
                 hparams[param_name] = combination[i]
             hparams['seed'] = seed
-            run_id = "_".join([f"{param_name}-{combination[i]}" for i, param_name in enumerate(param_names)])
+            run_id = ",".join([f"{param_name}-{combination[i]}" for i, param_name in enumerate(param_names)])
             run_id += f"_seed-{seed}"
             hparams['run_id'] = run_id
             hparams['run_dir'] = run_dir
