@@ -36,7 +36,7 @@ class PPO:
         self.critic_optim = Adam(self.critic.parameters(), lr=float(self.lr))
 
         # initialise covariance matrix
-        self.cov_mat = torch.eye(self.action_dim) * 0.5
+        self.cov_mat = self.cov_mat = torch.eye(self.action_dim, device=self.device) * 0.5
 
         # set up file paths
         self.results_dir = f"{self.run_dir}/results/"
@@ -110,8 +110,6 @@ class PPO:
                  batch_rewards-to-gos: reward-to-go at each timestep
                  batch_lengths: length of each episode in batch
         """
-
-        # collect and save experience
         batch_observations = []
         batch_actions = []
         batch_log_probs = []
@@ -121,27 +119,23 @@ class PPO:
         while t < self.timesteps_per_batch:
             episode_rewards = []
             obs = self.env.reset()
-            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
             for ep_t in range(self.max_episodic_timesteps):
                 t += 1
                 batch_observations.append(obs)
-                action, log_prob = self.get_action(obs, calculate_log_probs=True)
+                obs_tensor = torch.tensor(obs, dtype=torch.float32, device=self.device)
+                action, log_prob = self.get_action(obs_tensor, calculate_log_probs=True)
                 obs, reward, terminated, truncated, _ = self.env.step(action)
-                obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
                 batch_actions.append(action)
-                batch_log_probs.append(log_prob)
+                batch_log_probs.append(log_prob.cpu().item())  # If log_prob is a scalar tensor
                 episode_rewards.append(reward)
                 if terminated or truncated:
                     break
             batch_lens.append(len(episode_rewards))
             batch_rewards.append(episode_rewards)
-
-        # get experiences in shape, calc rewards to go
-        batch_observations = torch.tensor(np.array(batch_observations), dtype=torch.float)
-        batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float)
-        batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
+        batch_observations = torch.tensor(np.array(batch_observations), dtype=torch.float, device=self.device)
+        batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float, device=self.device)
+        batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float, device=self.device)
         batch_rewards_to_gos = self.get_reward_to_go(batch_rewards)
-
         return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens, batch_rewards
 
     def get_action(self, obs, calculate_log_probs=False):
@@ -159,9 +153,10 @@ class PPO:
         action = dist.sample()
         log_prob = dist.log_prob(action)
 
+        action_cpu = action.cpu()
         if calculate_log_probs:
-            return action.detach().numpy(), log_prob
-        return action.detach().numpy()
+            return action_cpu.detach().numpy(), log_prob
+        return action_cpu.detach().numpy()
 
     def get_reward_to_go(self, rewards):
         """
@@ -175,7 +170,7 @@ class PPO:
             for reward in reversed(episode_rewards):
                 discounted_reward = self.gamma * discounted_reward + reward
                 rewards_to_go.insert(0, discounted_reward)
-        rewards_to_go = torch.tensor(rewards_to_go, dtype=torch.float)
+        rewards_to_go = torch.tensor(rewards_to_go, dtype=torch.float, device=self.device)
         return rewards_to_go
 
     def get_value(self, obs):
