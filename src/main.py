@@ -42,5 +42,5 @@ if __name__ == '__main__':
     results = pool.map(run, hparams)
     pool.close()
     pool.join()
-    plot_rewards_with_seeds(f'../runs/{hparams[0]['run_id']}/results', hparams)
-    view_model_demo(f'../runs/{hparams[0]['run_id']}/checkpoints/propagation_steps-4_seed-6', hparams[0])
+    plot_rewards_with_seeds(f'../runs/{hparams[0]["run_id"]}/results', hparams)
+    # view_model_demo(f'../runs/{hparams[0]["run_id"]}/checkpoints/propagation_steps-4_seed-6', hparams[0])
