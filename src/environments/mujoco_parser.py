@@ -89,9 +89,9 @@ class MujocoParser:
             # register with gym (check how it works)
             register(id=("%s-v0" % env_name),
                      max_episode_steps=max_episode_steps,
-                     entry_point="environments.%s:ModularEnv" % env_file,
+                     entry_point="src.environments.%s:ModularEnv" % env_file,
                      kwargs=params)
-            env = IdentityWrapper(gym.make("environments:%s-v0" % env_name))
+            env = IdentityWrapper(gym.make("src.environments:%s-v0" % env_name))
             # the following is the same for each env
             limb_obs_size = env.limb_obs_size
             max_action = env.max_action
@@ -109,7 +109,7 @@ class MujocoParser:
     @staticmethod
     def make_env_wrapper(env_name, obs_max_len=None, seed=0):
         """return wrapped gym environment for parallel sample collection (vectorized environments)"""
-        e = gym.make("environments:%s-v0" % env_name, seed=seed, render_mode='human')
+        e = gym.make("src.environments:%s-v0" % env_name, seed=seed, render_mode='human')
         e.reset()
         e = ModularEnvWrapper(e, obs_max_len)
         return e
