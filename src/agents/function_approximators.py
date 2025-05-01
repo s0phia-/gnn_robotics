@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
+import torch_geometric.data
 
 
 class Encoder(nn.Module):
@@ -56,10 +57,27 @@ class GGNN_layer(MessagePassing):
         self.update_function = nn.GRUCell(input_size=out_dim, hidden_size=out_dim, device=device)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0)) #add self-loops (the so on prop the message form the node is considered)
         return self.propagate(edge_index, x=x)
 
     def message(self, x_i, x_j):
+        """
+        Message passing involves aggregating information from neighboring nodes.
+        For a given edge (i, j), where i is the target node and j is the source node:
+        
+        - x_i: Features of the target node i.
+        - x_j: Features of the source node j.
+        
+        The message function computes a message m_ij as:
+        
+        m_ij = f_message([x_i || x_j])
+        
+        where:
+        - [x_i || x_j] denotes the concatenation of x_i and x_j.
+        - f_message is a neural network (here, self.message_function).
+        
+        These messages are then aggregated by mean for all neighbors of node i.
+        """
         msg = torch.cat([x_i, x_j], dim=-1)
         return self.message_function(msg)
 
@@ -134,41 +152,53 @@ class MessagePassingGNN(nn.Module):
                                hidden_dim=self.decoder_and_message_hidden_dim,
                                hidden_layers=self.decoder_and_message_layers,
                                device=device).to(device)
+        
 
-    def forward(self, x: torch.Tensor):
-        batch_size = 1
-        if x.dim() > 1:
-            batch_size = x.size(0)
-            x = x.view(batch_size, self.num_nodes, self.node_feature_dim)
-            x = x.reshape(batch_size * self.num_nodes, self.node_feature_dim)
-        else:
-            x = x.view(self.num_nodes, self.node_feature_dim)
+    def forward(self, data:torch_geometric.data.Data):
+        x, edge_index = data.x, data.edge_index
 
         x = self.encoder(x=x)
 
-        if batch_size > 1:
-            edge_indices_batched = []
-            for i in range(batch_size):
-                offset = i * self.num_nodes
-                edge_indices_batched.append(self.edge_index + offset)
-            batched_edge_index = torch.cat(edge_indices_batched, dim=1)
-        else:
-            batched_edge_index = self.edge_index
-
         for i in range(self.propagation_steps):
-            x = self.middle[i](x=x, edge_index=batched_edge_index)
-
+            x = self.middle[i](x=x, edge_index=edge_index)
+        
         x = self.decoder(x=x)
-        x = x.squeeze(-1)
 
-        if batch_size > 1:
-            x = x.view(batch_size, self.num_nodes)
-            actuator_outputs = []
-            for i in range(batch_size):
-                actuator_outputs.append(self.actuator_mapping(x[i]))
-            return torch.stack(actuator_outputs)
-        else:
-            return self.actuator_mapping(x)
+
+    # def forward(self, x: torch.Tensor):
+    #     batch_size = 1
+    #     if x.dim() > 1:
+    #         batch_size = x.size(0)
+    #         x = x.view(batch_size, self.num_nodes, self.node_feature_dim)
+    #         x = x.reshape(batch_size * self.num_nodes, self.node_feature_dim)
+    #     else:
+    #         x = x.view(self.num_nodes, self.node_feature_dim)
+
+    #     x = self.encoder(x=x)
+
+    #     if batch_size > 1:
+    #         edge_indices_batched = []
+    #         for i in range(batch_size):
+    #             offset = i * self.num_nodes
+    #             edge_indices_batched.append(self.edge_index + offset)
+    #         batched_edge_index = torch.cat(edge_indices_batched, dim=1)
+    #     else:
+    #         batched_edge_index = self.edge_index
+
+    #     for i in range(self.propagation_steps):
+    #         x = self.middle[i](x=x, edge_index=batched_edge_index)
+
+    #     x = self.decoder(x=x)
+    #     x = x.squeeze(-1)
+
+    #     if batch_size > 1:
+    #         x = x.view(batch_size, self.num_nodes)
+    #         actuator_outputs = []
+    #         for i in range(batch_size):
+    #             actuator_outputs.append(self.actuator_mapping(x[i]))
+    #         return torch.stack(actuator_outputs)
+    #     else:
+    #         return self.actuator_mapping(x)
 
 
 class MultiEdgeGGNN_layer(GGNN_layer):

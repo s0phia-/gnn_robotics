@@ -17,6 +17,8 @@ def run(hparam):
     env = MujocoParser(**hparam).envs_train[0]
     edges = create_edges(env, device)
     actuator_mapping = create_actuator_mapping(env, device)
+    print(actuator_mapping)
+    exit()
     env.reset()
     actor = MessagePassingGNN(in_dim=15, num_nodes=9, edge_index=edges, actuator_mapping=actuator_mapping,
                               device=device, **hparam)
