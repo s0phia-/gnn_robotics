@@ -115,6 +115,7 @@ class MessagePassingGNN(nn.Module):
         self.num_nodes = num_nodes
         self.mask = torch.tensor(mask, dtype=torch.bool)
         self.node_feature_dim = in_dim
+        self.device = device
         self.register_buffer('edge_index', edge_index)
 
         self.encoder = Encoder(in_dim=in_dim,
@@ -163,7 +164,7 @@ class MessagePassingGNN(nn.Module):
 
         if batch_size > 1:
             x = x.view(batch_size, self.num_nodes)
-            x = [batch_item[self.mask] for batch_item in x]
+            x = torch.stack([batch_item[self.mask] for batch_item in x])
         else:
             x = x[self.mask]
         return x
