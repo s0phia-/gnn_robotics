@@ -16,7 +16,8 @@ import networkx as nx
 class MujocoParser:
     def __init__(self, **kwargs):
         self.__dict__.update((k, v) for k, v in kwargs.items())
-
+        print("Initializing MujocoParser with parameters: ", kwargs)
+        print("pwd = ",os.getcwd())
         # Retrieve MuJoCo XML files for training
         envs_train_names = [self.env_name]
         self.morph_graphs = dict()
@@ -87,11 +88,12 @@ class MujocoParser:
                 copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
             params = {'xml': os.path.abspath(xml)}
             # register with gym (check how it works)
+            
             register(id=("%s-v0" % env_name),
                      max_episode_steps=max_episode_steps,
-                     entry_point="environments.%s:ModularEnv" % env_file,
+                     entry_point="src.environments.%s:ModularEnv" % env_file,
                      kwargs=params)
-            env = IdentityWrapper(gym.make("environments:%s-v0" % env_name))
+            env = IdentityWrapper(gym.make("src.environments:%s-v0" % env_name))
             # the following is the same for each env
             limb_obs_size = env.limb_obs_size
             max_action = env.max_action
@@ -109,7 +111,7 @@ class MujocoParser:
     @staticmethod
     def make_env_wrapper(env_name, obs_max_len=None, seed=0):
         """return wrapped gym environment for parallel sample collection (vectorized environments)"""
-        e = gym.make("environments:%s-v0" % env_name, seed=seed, render_mode='human')
+        e = gym.make("src.environments:%s-v0" % env_name, seed=seed, render_mode='human')
         e.reset()
         e = ModularEnvWrapper(e, obs_max_len)
         return e
@@ -231,6 +233,7 @@ class IdentityWrapper(gym.Wrapper):
 
 class ModularEnvWrapper(gym.Wrapper):
     """
+    generating the graph 
     Force env to return fixed shape obs when called .reset() and .step() and removes action's padding before execution
     Also match the order of the actions returned by modular policy to the order of the environment actions
     """
@@ -258,7 +261,7 @@ class ModularEnvWrapper(gym.Wrapper):
             mapping[i] = joint_id - 1
         return mapping
 
-    def step(self, action):
+    def step(self, action): # ordering introduced here
         action = action[:self.num_limbs] # clip the 0-padding before processing
         reordered_action = np.zeros_like(action)
         for logical_idx, env_idx in self.action_mapping.items():
@@ -295,6 +298,8 @@ def create_edges(env, device):
 def create_actuator_mapping(env, device):
     joint_list = get_graph_joints(env.unwrapped.xml)
     actuator_list = get_motor_joints(env.unwrapped.xml)
+    print(f'joint_list = {joint_list}')
+    print(f'actuator_list = {actuator_list}')
     mapping_dict = {}
     for node_idx, (_, joint_name) in enumerate(joint_list):
         if joint_name in actuator_list:
@@ -305,6 +310,7 @@ def create_actuator_mapping(env, device):
         actuator_actions = torch.zeros(len(actuator_list), device=device)
         for node_idx, actuator_idx in mapping_dict.items():
             actuator_actions[actuator_idx] = node_outputs[node_idx]
+        print(f'actuator_actions = {actuator_actions}')
         return actuator_actions
 
     return actuator_mapping

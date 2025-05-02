@@ -25,6 +25,8 @@ class PPO:
         self.env = env
         self.device = device
         self.obs_dim = self.env.observation_space.shape[0]
+        print(f'obs_dim :{self.obs_dim}')
+        print(self.env.observation_space)
         self.action_dim = self.env.action_space.shape[0]
 
         # initialise actor and critic networks
@@ -56,7 +58,7 @@ class PPO:
 
             # perform a rollout
             batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
-
+            print('batch obs ',batch_obs)
             # Calculate average reward per episode in this batch
             avg_ep_reward = sum([sum(ep_rewards) for ep_rewards in batch_rewards]) / len(batch_rewards)
             rewards_history.append([iters, avg_ep_reward])
@@ -146,7 +148,10 @@ class PPO:
         :return: action, log probability of action (optional)
         """
         # create an action distribution
+        print(f'obs :{obs}')
+        self.num_nodes = obs.shape[0]
         mean_action = self.actor(obs)
+        print(f'output :{mean_action}')
         dist = MultivariateNormal(mean_action, self.cov_mat)
 
         # sample action, find log prob of action

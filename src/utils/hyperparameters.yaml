@@ -1,7 +1,7 @@
 #env params
 env_name:
   - ant
-max_episodic_timesteps: 1000
+max_episodic_timesteps: 10
 population_size: 8
 enable_features: True
 
@@ -11,7 +11,7 @@ gamma: 0.95
 clip_value: 0.1
 n_updates_per_iter: 10
 timesteps_per_batch: 2048
-total_timesteps: 1000000
+total_timesteps: 10
 
 # GNN params
 propagation_steps:
