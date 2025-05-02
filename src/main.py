@@ -35,11 +35,12 @@ def view_model_demo(model_path, hparam):
     actor = MultiEdgeTypeGNN(in_dim=15, num_nodes=9, edge_index=edges, actuator_mapping=actuator_mapping,
                               device=device, **hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
-    model.demo(actor_path=f'{model_path}/ppo_actor.pth', critic_path=f'{model_path}/ppo_critic.pth')
+    model.demo(actor_path=os.path.join(f'{model_path}','ppo_actor.pth'), critic_path=f'{model_path}/ppo_critic.pth')
 
 
 if __name__ == '__main__':
-    hparams = load_hparams('utils/hyperparameters.yaml', num_seeds=1)
+    print(os.getcwd())
+    hparams = load_hparams(os.path.join('utils','hyperparameters.yaml'), num_seeds=1)
     # if torch.cuda.is_available():
     #     mp.set_start_method('spawn', force=True)
     # pool = mp.Pool(processes=min(mp.cpu_count(), len(hparams)))
