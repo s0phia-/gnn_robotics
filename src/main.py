@@ -3,7 +3,7 @@ import os
 import multiprocessing as mp
 from src.utils.misc_utils import load_hparams
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
-from src.agents.function_approximators import MessagePassingGNN, MultiEdgeTypeGNN
+from src.agents.function_approximators import MessagePassingGNN
 from src.agents.ppo import PPO
 from src.utils.logger_config import set_run_id, get_logger
 from src.utils.analyse_data import plot_rewards_with_seeds
@@ -16,9 +16,9 @@ def run(hparam):
     logger.info(f"Starting run with parameters: {hparam['run_id']}")
     env = MujocoParser(**hparam).envs_train[0]
     edges = create_edges(env, device)
-    check_actuators(env)
+    actuator_mask = check_actuators(env)
     env.reset()
-    actor = MessagePassingGNN(in_dim=15, num_nodes=9, edge_index=edges, device=device, **hparam)
+    actor = MessagePassingGNN(in_dim=15, num_nodes=9, edge_index=edges, device=device, mask=actuator_mask, **hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.learn()
 
@@ -27,10 +27,10 @@ def view_model_demo(model_path, hparam):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     set_run_id(hparam['run_id'])
     env = MujocoParser(**hparam).envs_train[0]
-    check_actuators(env)
+    actuator_mask = check_actuators(env)
     edges = create_edges(env)
     env.reset()
-    actor = MultiEdgeTypeGNN(in_dim=15, num_nodes=9, edge_index=edges, device=device, **hparam)
+    actor = MessagePassingGNN(in_dim=15, num_nodes=9, edge_index=edges, device=device, mask=actuator_mask, **hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.demo(actor_path=f'{model_path}/ppo_actor.pth', critic_path=f'{model_path}/ppo_critic.pth')
 

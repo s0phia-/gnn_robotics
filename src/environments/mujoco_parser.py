@@ -295,8 +295,9 @@ def create_edges(env, device):
 
 def check_actuators(env):
     joint_list = get_graph_joints(env.unwrapped.xml)
-    new_list = [sublist[1] for sublist in joint_list
-            if not re.search(r'torso', sublist[0], re.IGNORECASE)]
+    mask = [not re.search(r'torso', sublist[0], re.IGNORECASE) for sublist in joint_list]
+    new_list = [joint_list[i][1] for i in range(len(joint_list)) if mask[i]]
     assert new_list == get_motor_joints(env.unwrapped.xml), \
         (f"Actuator ordering in XML file does not match Mujoco's expected ordering. Please search for <actuator> in the"
          f"xml file and rearrange the motor objects to match Mujoco's expected ordering: {new_list}")
+    return mask
