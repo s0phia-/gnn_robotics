@@ -100,7 +100,6 @@ class MessagePassingGNN(nn.Module):
                  in_dim: int,
                  num_nodes: int,
                  edge_index: torch.Tensor,
-                 actuator_mapping: Callable,
                  device: torch.device,
                  **kwargs
                  ):
@@ -112,7 +111,6 @@ class MessagePassingGNN(nn.Module):
         """
         super().__init__()
         self.__dict__.update((k, v) for k, v in kwargs.items())
-        self.actuator_mapping = actuator_mapping
         self.num_nodes = num_nodes
         self.node_feature_dim = in_dim
         self.register_buffer('edge_index', edge_index)
@@ -163,12 +161,7 @@ class MessagePassingGNN(nn.Module):
 
         if batch_size > 1:
             x = x.view(batch_size, self.num_nodes)
-            actuator_outputs = []
-            for i in range(batch_size):
-                actuator_outputs.append(self.actuator_mapping(x[i]))
-            return torch.stack(actuator_outputs)
-        else:
-            return self.actuator_mapping(x)
+        return x
 
 
 class MultiEdgeGGNN_layer(GGNN_layer):
@@ -195,8 +188,8 @@ class MultiEdgeGGNN_layer(GGNN_layer):
 
 
 class MultiEdgeTypeGNN(MessagePassingGNN):
-    def __init__(self, in_dim, num_nodes, edge_index, actuator_mapping, device, **kwargs):
-        super().__init__(in_dim, num_nodes, edge_index, actuator_mapping, device, **kwargs)
+    def __init__(self, in_dim, num_nodes, edge_index, device, **kwargs):
+        super().__init__(in_dim, num_nodes, edge_index, device, **kwargs)
 
         # Create fully connected edges
         fc_edges = self._create_fully_connected_edges(num_nodes).to(device)
@@ -256,9 +249,7 @@ class MultiEdgeTypeGNN(MessagePassingGNN):
 
         if batch_size > 1:
             x = x.view(batch_size, self.num_nodes)
-            return torch.stack([self.actuator_mapping(x[i]) for i in range(batch_size)])
-        else:
-            return self.actuator_mapping(x)
+        return x
 
 
 class FeedForward(nn.Module):
