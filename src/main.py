@@ -20,7 +20,15 @@ def run(hparam):
     print(actuator_mapping)
     env.reset()
     print(f'edges : {edges}')
-    actor = MessagePassingGNN(in_dim=15, num_nodes=9, edge_index=edges, actuator_mapping=actuator_mapping,
+    node_dim = 15
+    num_nodes = 9  
+    hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
+
+    actor = MessagePassingGNN(in_dim=node_dim, 
+                              num_nodes=num_nodes, 
+                              edge_index=edges, 
+                              action_dim=1,
+                              actuator_mapping=actuator_mapping,
                               device=device, **hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.learn()

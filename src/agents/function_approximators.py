@@ -117,7 +117,8 @@ class MessagePassingGNN(nn.Module):
     def __init__(self,
                  in_dim: int,
                  num_nodes: int,
-                 edge_index: torch.Tensor,
+                 action_dim: int,
+                #  edge_index: torch.Tensor,
                  actuator_mapping: Callable,
                  device: torch.device,
                  **kwargs
@@ -133,7 +134,7 @@ class MessagePassingGNN(nn.Module):
         self.actuator_mapping = actuator_mapping
         self.num_nodes = num_nodes
         self.node_feature_dim = in_dim
-        self.register_buffer('edge_index', edge_index)
+        # self.register_buffer('edge_index', edge_index)
 
         self.encoder = Encoder(in_dim=in_dim,
                                hidden_dim=self.hidden_node_dim,
@@ -146,8 +147,9 @@ class MessagePassingGNN(nn.Module):
                                           hidden_dim=self.decoder_and_message_hidden_dim,
                                           hidden_layers=self.decoder_and_message_layers,
                                           device=device))
+        print('decodor set up')
 
-        self.decoder = Decoder(out_dim=1,
+        self.decoder = Decoder(out_dim=action_dim,
                                in_dim=self.hidden_node_dim,
                                hidden_dim=self.decoder_and_message_hidden_dim,
                                hidden_layers=self.decoder_and_message_layers,
@@ -163,7 +165,27 @@ class MessagePassingGNN(nn.Module):
             x = self.middle[i](x=x, edge_index=edge_index)
         
         x = self.decoder(x=x)
+        print('shape after message passing : ',x.shape)
+        x = x.view(-1, self.num_nodes)
+        return x.squeeze(0)
 
+
+def make_graph(obs,num_nodes,edge_index):
+    """
+    make a pyg graph
+    """
+    x = torch.tensor(obs, dtype=torch.float).view(num_nodes, -1)
+    print('nodes shape : ',x.shape)
+    return torch_geometric.data.Data(x=x, edge_index=edge_index)
+
+def graph_to_action(graph):
+    """
+    convert graph to action
+    """
+    x = graph.x
+    x = x.view(-1)
+    x = x.unsqueeze(0)
+    return x
 
     # def forward(self, x: torch.Tensor):
     #     batch_size = 1

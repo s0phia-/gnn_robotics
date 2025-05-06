@@ -9,4 +9,4 @@
 .idea/
 *__pycache__*
 GNN-RL-venv*
-runs/run_20250501_152709/logs/_seed-6.log
+runs/*

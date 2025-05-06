@@ -1,4 +1,5 @@
 from src.utils.logger_config import get_logger
+from src.agents.function_approximators import make_graph
 import numpy as np
 import os
 import torch
@@ -17,6 +18,8 @@ class PPO:
     def __init__(self, actor, device, env, **kwargs):
         # extract parameters
         self.__dict__.update((k, v) for k, v in kwargs.items())
+
+        self.graph_info = kwargs['graph_info']
 
         # set seeds
         torch.manual_seed(self.seed)
@@ -121,6 +124,7 @@ class PPO:
         while t < self.timesteps_per_batch:
             episode_rewards = []
             obs = self.env.reset()
+            print(obs)
             for ep_t in range(self.max_episodic_timesteps):
                 t += 1
                 batch_observations.append(obs)
@@ -150,10 +154,15 @@ class PPO:
         # create an action distribution
         print(f'obs :{obs}')
         self.num_nodes = obs.shape[0]
-        mean_action = self.actor(obs)
+        print('num obs nodes : ',self.num_nodes)
+        print(self.graph_info)
+        graph = make_graph(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
+        print(graph.x)
+        mean_action = self.actor(graph)
+        print(f'mean action :{mean_action}')
         print(f'output :{mean_action}')
         dist = MultivariateNormal(mean_action, self.cov_mat)
-
+        print(dist)
         # sample action, find log prob of action
         action = dist.sample()
         log_prob = dist.log_prob(action)
