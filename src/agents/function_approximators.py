@@ -155,8 +155,7 @@ class MessagePassingGNN(nn.Module):
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
-        print('running actor')
-        print(data.batch)
+
         batch = data.batch
 
         x = self.encoder(x=x)
@@ -171,14 +170,12 @@ class MessagePassingGNN(nn.Module):
         if  batch is not None: # deals with when batch of graphs
             num_graphs = batch.max().item() + 1
             mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
-            print('mask shape :', mask.shape)
-            print('x shape : ', x.shape)
+
             x = x.view(-1)[mask]
-            print('new x shape : ', x.shape)
             x = x.view(num_graphs,x.shape[0]//num_graphs)
-            print('final x shape : ', x.shape)
 
             return x
+        
         else:  # Single graph case
             mask = self.mask
             x = x[mask]
@@ -189,15 +186,13 @@ def make_graph(obs,num_nodes,edge_index):
     """
     make a pyg graph
     """
-    x = torch.tensor(obs, dtype=torch.float).view(num_nodes, -1)
-    print('nodes shape : ',x.shape)
+    x = obs.view(num_nodes, -1)
     return Data(x=x, edge_index=edge_index)
 
 def make_graph_batch(obs_batch,num_nodes,edge_index):
-    print('batch obs shape: ',obs_batch.shape)
     data_list = []
     for obs in obs_batch:
-        x = torch.tensor(obs, dtype=torch.float).view(num_nodes, -1)
+        x = obs.view(num_nodes, -1)
         graph = Data(x=x, edge_index=edge_index)
         data_list.append(graph)
 

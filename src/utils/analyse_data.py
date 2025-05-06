@@ -7,6 +7,11 @@ from collections import defaultdict
 
 def process_folder(folder_path):
     results = defaultdict(list)
+    print()
+    print(os.getcwd())
+    print(os.listdir(folder_path))
+    print(os.path.exists(folder_path))
+    print()
     for filename in os.listdir(folder_path):
         if not ',' in filename or filename.startswith('.'):
             continue

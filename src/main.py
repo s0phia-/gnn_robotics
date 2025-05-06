@@ -53,5 +53,5 @@ if __name__ == '__main__':
     # pool.close()
     # pool.join()
     run(hparams[0])
-    plot_rewards_with_seeds(f'../runs/{hparams[0]["run_id"]}/results', hparams)
+    plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results', hparams)
     # view_model_demo(f'../runs/{hparams[0]["run_id"]}/checkpoints/propagation_steps-4_seed-6', hparams[0])
