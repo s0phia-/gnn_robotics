@@ -1,5 +1,5 @@
 from src.utils.logger_config import get_logger
-from src.agents.function_approximators import make_graph
+from src.agents.function_approximators import make_graph, make_graph_batch
 import numpy as np
 import os
 import torch
@@ -61,7 +61,8 @@ class PPO:
 
             # perform a rollout
             batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
-            print('batch obs ',batch_obs)
+            print("batch_actions ", batch_actions.shape)
+            print('batch obs ',batch_obs.shape)
             # Calculate average reward per episode in this batch
             avg_ep_reward = sum([sum(ep_rewards) for ep_rewards in batch_rewards]) / len(batch_rewards)
             rewards_history.append([iters, avg_ep_reward])
@@ -152,17 +153,18 @@ class PPO:
         :return: action, log probability of action (optional)
         """
         # create an action distribution
-        print(f'obs :{obs}')
+        # print(f'obs :{obs}')
+        print('action')
         self.num_nodes = obs.shape[0]
-        print('num obs nodes : ',self.num_nodes)
-        print(self.graph_info)
+        # print('num obs nodes : ',self.num_nodes)
+        # print(self.graph_info)
         graph = make_graph(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
-        print(graph.x)
+        # print(graph.x)
         mean_action = self.actor(graph)
-        print(f'mean action :{mean_action}')
-        print(f'output :{mean_action}')
+        # print(f'mean action :{mean_action}')
+        # print(f'output :{mean_action}')
         dist = MultivariateNormal(mean_action, self.cov_mat)
-        print(dist)
+        # print(dist)
         # sample action, find log prob of action
         action = dist.sample()
         log_prob = dist.log_prob(action)
@@ -202,8 +204,18 @@ class PPO:
         :param actions: actions to calculate log probability for
         :return: log probabilities of actions
         """
-        dist = MultivariateNormal(self.actor(obs), self.cov_mat)
+        print('actor logs')
+        # self.num_nodes 
+        print(obs.shape)
+        # print('num obs nodes : ',self.num_nodes)
+        # print(self.graph_info)
+        graph_batch = make_graph_batch(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
+        print(graph_batch)
+        batch_action = self.actor(graph_batch)
+        print('output shape : ',batch_action.shape)
+        dist = MultivariateNormal(batch_action, self.cov_mat)
         log_probs = dist.log_prob(actions)
+
         return log_probs
 
     def demo(self, actor_path, critic_path):

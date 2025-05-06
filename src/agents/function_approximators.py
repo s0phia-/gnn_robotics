@@ -4,7 +4,7 @@ import numpy as np
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
-import torch_geometric.data
+from torch_geometric.data import Data, Batch
 
 
 class Encoder(nn.Module):
@@ -153,8 +153,11 @@ class MessagePassingGNN(nn.Module):
                                device=device).to(device)
         
 
-    def forward(self, data:torch_geometric.data.Data):
+    def forward(self, data):
         x, edge_index = data.x, data.edge_index
+        print('running actor')
+        print(data.batch)
+        batch = data.batch
 
         x = self.encoder(x=x)
 
@@ -164,8 +167,22 @@ class MessagePassingGNN(nn.Module):
         x = self.decoder(x=x)
         x = x.view(-1, self.num_nodes)
         x = x.squeeze(0)
-        x = x[self.mask]
-        return x
+        
+        if  batch is not None: # deals with when batch of graphs
+            num_graphs = batch.max().item() + 1
+            mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
+            print('mask shape :', mask.shape)
+            print('x shape : ', x.shape)
+            x = x.view(-1)[mask]
+            print('new x shape : ', x.shape)
+            x = x.view(num_graphs,x.shape[0]//num_graphs)
+            print('final x shape : ', x.shape)
+
+            return x
+        else:  # Single graph case
+            mask = self.mask
+            x = x[mask]
+            return x
 
 
 def make_graph(obs,num_nodes,edge_index):
@@ -174,7 +191,17 @@ def make_graph(obs,num_nodes,edge_index):
     """
     x = torch.tensor(obs, dtype=torch.float).view(num_nodes, -1)
     print('nodes shape : ',x.shape)
-    return torch_geometric.data.Data(x=x, edge_index=edge_index)
+    return Data(x=x, edge_index=edge_index)
+
+def make_graph_batch(obs_batch,num_nodes,edge_index):
+    print('batch obs shape: ',obs_batch.shape)
+    data_list = []
+    for obs in obs_batch:
+        x = torch.tensor(obs, dtype=torch.float).view(num_nodes, -1)
+        graph = Data(x=x, edge_index=edge_index)
+        data_list.append(graph)
+
+    return Batch.from_data_list(data_list)
 
   
 def graph_to_action(graph):
