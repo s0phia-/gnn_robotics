@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
+import torch_geometric.data
 
 
 class Encoder(nn.Module):
@@ -56,10 +57,27 @@ class GGNN_layer(MessagePassing):
         self.update_function = nn.GRUCell(input_size=out_dim, hidden_size=out_dim, device=device)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0)) #add self-loops (the so on prop the message form the node is considered)
         return self.propagate(edge_index, x=x)
 
     def message(self, x_i, x_j):
+        """
+        Message passing involves aggregating information from neighboring nodes.
+        For a given edge (i, j), where i is the target node and j is the source node:
+        
+        - x_i: Features of the target node i.
+        - x_j: Features of the source node j.
+        
+        The message function computes a message m_ij as:
+        
+        m_ij = f_message([x_i || x_j])
+        
+        where:
+        - [x_i || x_j] denotes the concatenation of x_i and x_j.
+        - f_message is a neural network (here, self.message_function).
+        
+        These messages are then aggregated by mean for all neighbors of node i.
+        """
         msg = torch.cat([x_i, x_j], dim=-1)
         return self.message_function(msg)
 
@@ -99,7 +117,7 @@ class MessagePassingGNN(nn.Module):
     def __init__(self,
                  in_dim: int,
                  num_nodes: int,
-                 edge_index: torch.Tensor,
+                 action_dim: int,
                  mask: list,
                  device: torch.device,
                  **kwargs
@@ -115,8 +133,6 @@ class MessagePassingGNN(nn.Module):
         self.num_nodes = num_nodes
         self.mask = torch.tensor(mask, dtype=torch.bool)
         self.node_feature_dim = in_dim
-        self.device = device
-        self.register_buffer('edge_index', edge_index)
 
         self.encoder = Encoder(in_dim=in_dim,
                                hidden_dim=self.hidden_node_dim,
@@ -130,44 +146,45 @@ class MessagePassingGNN(nn.Module):
                                           hidden_layers=self.decoder_and_message_layers,
                                           device=device))
 
-        self.decoder = Decoder(out_dim=1,
+        self.decoder = Decoder(out_dim=action_dim,
                                in_dim=self.hidden_node_dim,
                                hidden_dim=self.decoder_and_message_hidden_dim,
                                hidden_layers=self.decoder_and_message_layers,
                                device=device).to(device)
+        
 
-    def forward(self, x: torch.Tensor):
-        batch_size = 1
-        if x.dim() > 1:
-            batch_size = x.size(0)
-            x = x.view(batch_size, self.num_nodes, self.node_feature_dim)
-            x = x.reshape(batch_size * self.num_nodes, self.node_feature_dim)
-        else:
-            x = x.view(self.num_nodes, self.node_feature_dim)
+    def forward(self, data:torch_geometric.data.Data):
+        x, edge_index = data.x, data.edge_index
 
         x = self.encoder(x=x)
 
-        if batch_size > 1:
-            edge_indices_batched = []
-            for i in range(batch_size):
-                offset = i * self.num_nodes
-                edge_indices_batched.append(self.edge_index + offset)
-            batched_edge_index = torch.cat(edge_indices_batched, dim=1)
-        else:
-            batched_edge_index = self.edge_index
-
         for i in range(self.propagation_steps):
-            x = self.middle[i](x=x, edge_index=batched_edge_index)
-
+            x = self.middle[i](x=x, edge_index=edge_index)
+        
         x = self.decoder(x=x)
-        x = x.squeeze(-1)
-
-        if batch_size > 1:
-            x = x.view(batch_size, self.num_nodes)
-            x = torch.stack([batch_item[self.mask] for batch_item in x])
-        else:
-            x = x[self.mask]
+        x = x.view(-1, self.num_nodes)
+        x = x.squeeze(0)
+        x = x[self.mask]
         return x
+
+
+def make_graph(obs,num_nodes,edge_index):
+    """
+    make a pyg graph
+    """
+    x = torch.tensor(obs, dtype=torch.float).view(num_nodes, -1)
+    print('nodes shape : ',x.shape)
+    return torch_geometric.data.Data(x=x, edge_index=edge_index)
+
+  
+def graph_to_action(graph):
+    """
+    convert graph to action
+    """
+    x = graph.x
+    x = x.view(-1)
+    x = x.unsqueeze(0)
+    return x
 
 
 class FeedForward(nn.Module):

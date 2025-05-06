@@ -7,3 +7,6 @@
 /dataSources/
 /dataSources.local.xml
 .idea/
+*__pycache__*
+GNN-RL-venv*
+runs/*

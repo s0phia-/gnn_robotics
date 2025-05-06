@@ -17,7 +17,8 @@ import re
 class MujocoParser:
     def __init__(self, **kwargs):
         self.__dict__.update((k, v) for k, v in kwargs.items())
-
+        print("Initializing MujocoParser with parameters: ", kwargs)
+        print("pwd = ",os.getcwd())
         # Retrieve MuJoCo XML files for training
         envs_train_names = [self.env_name]
         self.morph_graphs = dict()
@@ -88,6 +89,7 @@ class MujocoParser:
                 copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
             params = {'xml': os.path.abspath(xml)}
             # register with gym (check how it works)
+            
             register(id=("%s-v0" % env_name),
                      max_episode_steps=max_episode_steps,
                      entry_point="src.environments.%s:ModularEnv" % env_file,
@@ -232,6 +234,7 @@ class IdentityWrapper(gym.Wrapper):
 
 class ModularEnvWrapper(gym.Wrapper):
     """
+    generating the graph 
     Force env to return fixed shape obs when called .reset() and .step() and removes action's padding before execution
     Also match the order of the actions returned by modular policy to the order of the environment actions
     """
@@ -259,7 +262,7 @@ class ModularEnvWrapper(gym.Wrapper):
             mapping[i] = joint_id - 1
         return mapping
 
-    def step(self, action):
+    def step(self, action): # ordering introduced here
         action = action[:self.num_limbs] # clip the 0-padding before processing
         reordered_action = np.zeros_like(action)
         for logical_idx, env_idx in self.action_mapping.items():

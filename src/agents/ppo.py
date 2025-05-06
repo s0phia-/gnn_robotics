@@ -1,4 +1,5 @@
 from src.utils.logger_config import get_logger
+from src.agents.function_approximators import make_graph
 import numpy as np
 import os
 import torch
@@ -18,6 +19,8 @@ class PPO:
         # extract parameters
         self.__dict__.update((k, v) for k, v in kwargs.items())
 
+        self.graph_info = kwargs['graph_info']
+
         # set seeds
         torch.manual_seed(self.seed)
 
@@ -25,6 +28,8 @@ class PPO:
         self.env = env
         self.device = device
         self.obs_dim = self.env.observation_space.shape[0]
+        print(f'obs_dim :{self.obs_dim}')
+        print(self.env.observation_space)
         self.action_dim = self.env.action_space.shape[0]
 
         # initialise actor and critic networks
@@ -56,7 +61,7 @@ class PPO:
 
             # perform a rollout
             batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
-
+            print('batch obs ',batch_obs)
             # Calculate average reward per episode in this batch
             avg_ep_reward = sum([sum(ep_rewards) for ep_rewards in batch_rewards]) / len(batch_rewards)
             rewards_history.append([iters, avg_ep_reward])
@@ -119,6 +124,7 @@ class PPO:
         while t < self.timesteps_per_batch:
             episode_rewards = []
             obs = self.env.reset()
+            print(obs)
             for ep_t in range(self.max_episodic_timesteps):
                 t += 1
                 batch_observations.append(obs)
@@ -146,9 +152,17 @@ class PPO:
         :return: action, log probability of action (optional)
         """
         # create an action distribution
-        mean_action = self.actor(obs)
+        print(f'obs :{obs}')
+        self.num_nodes = obs.shape[0]
+        print('num obs nodes : ',self.num_nodes)
+        print(self.graph_info)
+        graph = make_graph(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
+        print(graph.x)
+        mean_action = self.actor(graph)
+        print(f'mean action :{mean_action}')
+        print(f'output :{mean_action}')
         dist = MultivariateNormal(mean_action, self.cov_mat)
-
+        print(dist)
         # sample action, find log prob of action
         action = dist.sample()
         log_prob = dist.log_prob(action)
