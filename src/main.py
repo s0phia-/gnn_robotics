@@ -25,7 +25,7 @@ def run(hparam):
                               num_nodes=num_nodes, 
                               edge_index=edges, 
                               action_dim=1,
-                              actuator_mapping=actuator_mapping,
+                              mask=actuator_mask,
                               device=device, **hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.learn()
