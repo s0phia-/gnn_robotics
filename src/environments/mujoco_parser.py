@@ -11,6 +11,7 @@ from shutil import copyfile
 import numpy as np
 import torch
 import networkx as nx
+import re
 
 
 class MujocoParser:
@@ -295,22 +296,11 @@ def create_edges(env, device):
         return torch.zeros((2, 0), dtype=torch.long, device=device)
 
 
-def create_actuator_mapping(env, device):
+def check_actuators(env):
     joint_list = get_graph_joints(env.unwrapped.xml)
-    actuator_list = get_motor_joints(env.unwrapped.xml)
-    print(f'joint_list = {joint_list}')
-    print(f'actuator_list = {actuator_list}')
-    mapping_dict = {}
-    for node_idx, (_, joint_name) in enumerate(joint_list):
-        if joint_name in actuator_list:
-            actuator_idx = actuator_list.index(joint_name)
-            mapping_dict[node_idx] = actuator_idx
-
-    def actuator_mapping(node_outputs):
-        actuator_actions = torch.zeros(len(actuator_list), device=device)
-        for node_idx, actuator_idx in mapping_dict.items():
-            actuator_actions[actuator_idx] = node_outputs[node_idx]
-        print(f'actuator_actions = {actuator_actions}')
-        return actuator_actions
-
-    return actuator_mapping
+    mask = [not re.search(r'torso', sublist[0], re.IGNORECASE) for sublist in joint_list]
+    new_list = [joint_list[i][1] for i in range(len(joint_list)) if mask[i]]
+    assert new_list == get_motor_joints(env.unwrapped.xml), \
+        (f"Actuator ordering in XML file does not match Mujoco's expected ordering. Please search for <actuator> in the"
+         f"xml file and rearrange the motor objects to match Mujoco's expected ordering: {new_list}")
+    return mask
