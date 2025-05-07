@@ -45,13 +45,12 @@ def view_model_demo(model_path, hparam):
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__))) # ensure the script is run from the correct directory
-    hparams = load_hparams(os.path.join('utils','hyperparameters.yaml'), num_seeds=1)
-    # if torch.cuda.is_available():
-    #     mp.set_start_method('spawn', force=True)
-    # pool = mp.Pool(processes=min(mp.cpu_count(), len(hparams)))
-    # results = pool.map(run, hparams)
-    # pool.close()
-    # pool.join()
-    run(hparams[0])
-    plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results', hparams)
+    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=1)
+    if torch.cuda.is_available():
+        mp.set_start_method('spawn', force=True)
+    pool = mp.Pool(processes=min(mp.cpu_count(), len(hparams)))
+    results = pool.map(run, hparams)
+    pool.close()
+    pool.join()
+    plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
     # view_model_demo(f'../runs/{hparams[0]["run_id"]}/checkpoints/propagation_steps-4_seed-6', hparams[0])

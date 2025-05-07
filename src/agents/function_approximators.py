@@ -151,15 +151,11 @@ class MessagePassingGNN(nn.Module):
                                hidden_dim=self.decoder_and_message_hidden_dim,
                                hidden_layers=self.decoder_and_message_layers,
                                device=device).to(device)
-        
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
-
         batch = data.batch
-
         x = self.encoder(x=x)
-
         for i in range(self.propagation_steps):
             x = self.middle[i](x=x, edge_index=edge_index)
         
@@ -167,13 +163,11 @@ class MessagePassingGNN(nn.Module):
         x = x.view(-1, self.num_nodes)
         x = x.squeeze(0)
         
-        if  batch is not None: # deals with when batch of graphs
+        if batch is not None:  # deals with when batch of graphs
             num_graphs = batch.max().item() + 1
             mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
-
             x = x.view(-1)[mask]
-            x = x.view(num_graphs,x.shape[0]//num_graphs)
-
+            x = x.view(num_graphs, x.shape[0]//num_graphs)
             return x
         
         else:  # Single graph case
@@ -182,12 +176,13 @@ class MessagePassingGNN(nn.Module):
             return x
 
 
-def make_graph(obs,num_nodes,edge_index):
+def make_graph(obs, num_nodes, edge_index):
     """
     make a pyg graph
     """
     x = obs.view(num_nodes, -1)
     return Data(x=x, edge_index=edge_index)
+
 
 def make_graph_batch(obs_batch,num_nodes,edge_index):
     data_list = []

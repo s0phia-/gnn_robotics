@@ -7,13 +7,8 @@ from collections import defaultdict
 
 def process_folder(folder_path):
     results = defaultdict(list)
-    print()
-    print(os.getcwd())
-    print(os.listdir(folder_path))
-    print(os.path.exists(folder_path))
-    print()
     for filename in os.listdir(folder_path):
-        if not ',' in filename or filename.startswith('.'):
+        if filename.startswith('.'):
             continue
         param_value_pairs = filename.split(',')
         params_dict = {}
@@ -41,7 +36,7 @@ def average_results(results_dict):
     return averaged_results
 
 
-def plot_averaged_data(avg_data, save_path=None, smoothed=False, show_std=False):
+def plot_averaged_data(avg_data, save_path=None, smoothed=False):
     plt.figure(figsize=(12, 8))
     param_names = sorted(avg_data.keys())
     for param_name in param_names:
@@ -64,7 +59,8 @@ def plot_averaged_data(avg_data, save_path=None, smoothed=False, show_std=False)
     plt.show()
 
 
-def plot_rewards_with_seeds(results_folder, save_path=None):
+def plot_rewards_with_seeds(results_folder):
+    save_path=results_folder
     grouped_data = process_folder(results_folder)
     avg_data = average_results(grouped_data)
     # avg_data.pop("decoder_and_message_hidden_dim-64_hidden_node_dim-32_propagation_steps-4", None)
