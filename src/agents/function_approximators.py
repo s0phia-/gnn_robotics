@@ -1,4 +1,3 @@
-from typing import Callable
 import torch
 import numpy as np
 import torch.nn as nn
@@ -28,7 +27,7 @@ class Encoder(nn.Module):
         return self.layers(x)
 
 
-class GGNN_layer(MessagePassing):
+class Gnnlayer(MessagePassing):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
@@ -46,15 +45,19 @@ class GGNN_layer(MessagePassing):
         super().__init__(aggr='mean')
 
         # construct message function
-        self.message_layers = [nn.Linear(in_dim * 2, hidden_dim, device=device), nn.Tanh()]
-        for _ in range(hidden_layers - 1):
-            self.message_layers.append(nn.Linear(hidden_dim, hidden_dim, device=device))
-            self.message_layers.append(nn.Tanh())
-        self.message_layers.append(nn.Linear(hidden_dim, out_dim, device=device))
-        self.message_function = nn.Sequential(*self.message_layers)
+        self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
 
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim, hidden_size=out_dim, device=device)
+
+    @staticmethod
+    def _build_mlp(in_dim, hidden_dim, out_dim, hidden_layers, device):
+        layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.Tanh()]
+        for _ in range(hidden_layers - 1):
+            layers.append(nn.Linear(hidden_dim, hidden_dim, device=device))
+            layers.append(nn.Tanh())
+        layers.append(nn.Linear(hidden_dim, out_dim, device=device))
+        return nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0)) #add self-loops (the so on prop the message form the node is considered)
@@ -140,7 +143,7 @@ class MessagePassingGNN(nn.Module):
 
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
-            self.middle.append(GGNN_layer(in_dim=self.hidden_node_dim,
+            self.middle.append(Gnnlayer(in_dim=self.hidden_node_dim,
                                           out_dim=self.hidden_node_dim,
                                           hidden_dim=self.decoder_and_message_hidden_dim,
                                           hidden_layers=self.decoder_and_message_layers,
@@ -171,8 +174,7 @@ class MessagePassingGNN(nn.Module):
             return x
         
         else:  # Single graph case
-            mask = self.mask
-            x = x[mask]
+            x = x[self.mask]
             return x
 
 
