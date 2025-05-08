@@ -1,7 +1,7 @@
 #env params
 env_name:
   - ant
-max_episodic_timesteps: 100
+max_episodic_timesteps: 1000
 population_size: 8
 enable_features: True
 
@@ -10,8 +10,8 @@ lr: 3e-4
 gamma: 0.95
 clip_value: 0.1
 n_updates_per_iter: 10
-timesteps_per_batch: 100
-total_timesteps: 100000
+timesteps_per_batch: 2048
+total_timesteps: 1000000
 
 # GNN params
 propagation_steps:
@@ -40,4 +40,3 @@ xml_path: 'environments/assets'
 env_dir: './environments'
 base_modular_env_path: './environments/ModularEnv.py'
 data_dir: './results'
-
