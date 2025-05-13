@@ -33,6 +33,8 @@ class MujocoParser:
         order_idx = np.argsort([len(self.morph_graphs[env_name]) for env_name in envs_train_names])[::-1]
         envs_train_names = [envs_train_names[order] for order in order_idx]
 
+        self.num_nodes = len(self.morph_graphs[envs_train_names[0]])
+
         # Set up training env ================================================
         self.limb_obs_size, self.max_action = self.register_envs(envs_train_names, self.max_episodic_timesteps)
         self.max_num_limbs = max([len(self.morph_graphs[env_name]) for env_name in envs_train_names])

@@ -1,6 +1,7 @@
 from src.agents.function_approximators import *
 from src.utils.torch_scatter import scatter_mean
 
+
 class Method2Gnn(MessagePassingGNN):
     def __init__(self,
                  in_dim: int,
@@ -21,20 +22,20 @@ class Method2Gnn(MessagePassingGNN):
 
     def forward(self, data):
         x_morph, edge_index_morph = data.x, data.edge_index
-        x_fc = x_morph.copy()
         n = data.num_nodes
-        # Create dense adjacency matrix with ones everywhere except diagonal
         adj = torch.ones(n, n, device=data.edge_index.device) - torch.eye(n, device=data.edge_index.device)
-        # Convert to edge_index format (2 x E)
-        data.edge_index = adj.nonzero().t()
-        edge_index_fc =
+        edge_index_fc = adj.nonzero().t()
         batch = data.batch
-        x = self.encoder(x=x)
+        x = self.encoder(x=x_morph)
 
         for i in range(self.propagation_steps):
-            x = self.middle[i](x=x, edge_index=edge_index)
+            x = self.middle[i](x=x,
+                               edge_index_type1=edge_index_morph,
+                               edge_index_type2=edge_index_fc)
+            print(x.shape)
 
         x = self.decoder(x=x)
+
         x = x.view(-1, self.num_nodes)
         x = x.squeeze(0)
 
@@ -50,7 +51,7 @@ class Method2Gnn(MessagePassingGNN):
             return x
 
 
-class GnnLayerDoubleAgg(MessagePassing):
+class GnnLayerDoubleAgg(Gnnlayer):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
@@ -67,7 +68,7 @@ class GnnLayerDoubleAgg(MessagePassing):
         :param update_hidden_dim:
         :param device:
         """
-        super().__init__(aggr='mean')  # will be overwritten
+        super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device)
 
         # construct message functions
         self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
