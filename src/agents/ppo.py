@@ -86,12 +86,12 @@ class PPO:
                 critic_loss = nn.MSELoss()(vv, batch_reward_to_go)
 
                 # backprop actor network
-                self.actor_optim.zero_grad()
+                self.actor_optim.zero_grad(set_to_none=True)
                 actor_loss.backward(retain_graph=True)
                 self.actor_optim.step()
 
                 # backprop critic network
-                self.critic_optim.zero_grad()
+                self.critic_optim.zero_grad(set_to_none=True)
                 critic_loss.backward()
                 self.critic_optim.step()
 
@@ -192,6 +192,7 @@ class PPO:
         :param actions: actions to calculate log probability for
         :return: log probabilities of actions
         """
+        print(f"Batch size: {len(obs)}")
         graph_batch = make_graph_batch(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
         batch_action = self.actor(graph_batch)
         dist = MultivariateNormal(batch_action, self.cov_mat)
