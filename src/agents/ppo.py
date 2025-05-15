@@ -192,7 +192,6 @@ class PPO:
         :param actions: actions to calculate log probability for
         :return: log probabilities of actions
         """
-        print(f"Batch size: {len(obs)}")
         graph_batch = make_graph_batch(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
         batch_action = self.actor(graph_batch)
         dist = MultivariateNormal(batch_action, self.cov_mat)
