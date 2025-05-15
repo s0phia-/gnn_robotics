@@ -16,11 +16,12 @@ def run(hparam):
     logger.info(f"Starting run with parameters: {hparam['run_id']}")
     env_setup = MujocoParser(**hparam)
     env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
+    print(f"{env=}, {node_dim=}, {num_nodes=}")
     edges = create_edges(env, device)
     actuator_mask = check_actuators(env)
     env.reset()
-    node_dim = 15
-    num_nodes = 9  
+    # node_dim = 15
+    # num_nodes = 9  
     hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
     actor = MessagePassingGNN(in_dim=node_dim, 
                               num_nodes=num_nodes, 
