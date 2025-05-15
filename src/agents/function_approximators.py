@@ -33,7 +33,8 @@ class Gnnlayer(MessagePassing):
                  out_dim: int,
                  hidden_dim: int,
                  hidden_layers: int,
-                 device: torch.device):
+                 device: torch.device,
+                 aggregator_type: str = 'mean'):
         """
         Message passing graph neural network, used between an encoder and decoder in NerveNet.
         :param message_hidden_layers:
@@ -42,7 +43,7 @@ class Gnnlayer(MessagePassing):
         :param update_hidden_dim:
         :param device:
         """
-        super().__init__(aggr='mean')
+        super().__init__(aggr=aggregator_type)
 
         # construct message function
         self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
