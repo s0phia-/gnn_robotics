@@ -46,7 +46,7 @@ class Gnnlayer(MessagePassing):
         super().__init__(aggr=aggregator_type)
 
         # construct message function
-        self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
+        self.message_function = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
 
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim, hidden_size=out_dim, device=device)
