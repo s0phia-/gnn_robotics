@@ -1,5 +1,5 @@
 from src.agents.function_approximators import *
-from src.utils.torch_scatter import scatter_mean
+from torch_geometric.utils import dense_to_sparse
 
 
 class Method2Gnn(MessagePassingGNN):
@@ -23,16 +23,33 @@ class Method2Gnn(MessagePassingGNN):
     def forward(self, data):
         x_morph, edge_index_morph = data.x, data.edge_index
         n = data.num_nodes
-        adj = torch.ones(n, n, device=data.edge_index.device) - torch.eye(n, device=data.edge_index.device)
-        edge_index_fc = adj.nonzero().t()
+
+        print(f"Number of nodes: {n}")
+
         batch = data.batch
+        if batch is not None:
+            edge_index_fc = torch.cat(
+                [torch.combinations(torch.where(batch == i)[0], 2).flip(1).repeat_interleave(2, dim=0).reshape(2, -1)
+                 for i in range(batch.max().item() + 1)], dim=1)
+        else:
+            adj = torch.ones(n, n, device=data.edge_index.device) - torch.eye(n, device=data.edge_index.device)
+            edge_index_fc, _ = dense_to_sparse(adj)
+
+            del adj
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        print(f"Fully connected edges shape: {edge_index_fc.shape}")
+
         x = self.encoder(x=x_morph)
 
         for i in range(self.propagation_steps):
             x = self.middle[i](x=x,
                                edge_index_type1=edge_index_morph,
                                edge_index_type2=edge_index_fc)
-            print(x.shape)
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         x = self.decoder(x=x)
 
@@ -57,7 +74,8 @@ class GnnLayerDoubleAgg(Gnnlayer):
                  out_dim: int,
                  hidden_dim: int,
                  hidden_layers: int,
-                 device: torch.device):
+                 device: torch.device,
+                 aggregator_type: str = 'mean'):
         """
         Message passing GNN layer with two edge types, each aggregated separately and then combined in an update
         function which now takes the form h_{t+1} = U(h_t, agg1, agg2) where agg1 and agg2 are the separately aggregated
@@ -68,48 +86,32 @@ class GnnLayerDoubleAgg(Gnnlayer):
         :param update_hidden_dim:
         :param device:
         """
-        super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device)
+        super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device, aggregator_type)
 
         # construct message functions
-        self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
-        self.message_function_type2 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
+        self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim * 2, hidden_layers, device)
+        self.message_function_type2 = self._build_mlp(in_dim * 2, hidden_dim, out_dim * 2, hidden_layers, device)
 
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim*2, hidden_size=out_dim, device=device)
 
-    def forward(self, x: torch.Tensor, edge_index_type1: torch.Tensor, edge_index_type2: torch.Tensor):
-        edge_index, _ = add_self_loops(edge_index_type1, num_nodes=x.size(0))
+        self.current_edge_type = None
 
-        agg_type1 = self.propagate_type(edge_index_type1, x=x, edge_type=1)
-        agg_type2 = self.propagate_type(edge_index_type2, x=x, edge_type=2)
+    def forward(self, x: torch.Tensor, edge_index_type1: torch.Tensor, edge_index_type2: torch.Tensor):
+        self.current_edge_type = 1
+        agg_type1 = self.propagate(edge_index_type1, x=x)
+
+        self.current_edge_type = 2
+        agg_type2 = self.propagate(edge_index_type2, x=x)
 
         combined_agg = torch.cat([agg_type1, agg_type2], dim=1)  # concatenate the aggregated messages
         updated_features = self.update_function(combined_agg, x)
 
         return updated_features
 
-    def propagate_type(self, edge_index, x, edge_type):
-        """
-        Propagate messages along edges of a specific type
-        :param edge_index: Edge indices [2, num_edges]
-        :param x: Node features [num_nodes, in_dim]
-        :param edge_type: Type of edges (1 or 2)
-        """
-        source_node_idx, target_node_idx = edge_index
-        source_features, target_features = x[source_node_idx], x[target_node_idx]
-
-        if edge_type == 1:
-            messages = self.message_function_type1(torch.cat([source_features, target_features], dim=-1))
-        if edge_type == 2:
-            messages = self.message_function_type2(torch.cat([source_features, target_features], dim=-1))
-
-        agg_messages = scatter_mean(messages, target_node_idx, dim=0, dim_size=x.size(0))
-
-        return agg_messages
-
-    def message(self, x_i, x_j, edge_type):
+    def message(self, x_i, x_j):
         msg = torch.cat([x_i, x_j], dim=-1)
-        if edge_type == 1:
+        if self.current_edge_type == 1:
             return self.message_function_type1(msg)
-        if edge_type == 2:
+        else:  # edge_type == 2
             return self.message_function_type2(msg)
