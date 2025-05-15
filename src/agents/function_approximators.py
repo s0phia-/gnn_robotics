@@ -171,7 +171,7 @@ class MessagePassingGNN(nn.Module):
             num_graphs = batch.max().item() + 1
             mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
             x = x.view(-1)[mask]
-            x = x.view(num_graphs, x.shape[0]//num_graphs)
+            x = x.view(num_graphs, x.shape[0] // num_graphs)
             return x
         
         else:  # Single graph case
@@ -187,7 +187,7 @@ def make_graph(obs, num_nodes, edge_index):
     return Data(x=x, edge_index=edge_index)
 
 
-def make_graph_batch(obs_batch,num_nodes,edge_index):
+def make_graph_batch(obs_batch, num_nodes, edge_index):
     data_list = []
     for obs in obs_batch:
         x = obs.view(num_nodes, -1)
@@ -196,7 +196,7 @@ def make_graph_batch(obs_batch,num_nodes,edge_index):
 
     return Batch.from_data_list(data_list)
 
-  
+
 def graph_to_action(graph):
     """
     convert graph to action

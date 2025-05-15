@@ -3,6 +3,7 @@ import os
 import multiprocessing as mp
 from src.utils.misc_utils import load_hparams
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
+from src.agents.function_approximators import MessagePassingGNN
 from src.agents.method2 import Method2Gnn
 from src.agents.ppo import PPO
 from src.utils.logger_config import set_run_id, get_logger
@@ -22,8 +23,8 @@ def run(hparam):
     env.reset()
     hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
     actor = Method2Gnn(in_dim=node_dim,
-                              num_nodes=num_nodes, 
-                              edge_index=edges, 
+                              num_nodes=num_nodes,
+                              edge_index=edges,
                               action_dim=1,
                               mask=actuator_mask,
                               device=device, **hparam)
