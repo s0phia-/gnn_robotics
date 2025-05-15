@@ -12,22 +12,29 @@ from gymnasium.spaces import Box
 class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     metadata = {
         "render_modes": ["human", "rgb_array", "depth_array"],
-        "render_fps": 25,
+        # "render_fps": 25,
     }
 
     def __init__(self, xml, seed=None, **kwargs):
+        print(f"HERE: self.metadata: {self.metadata}")
         self.xml = xml
         render_mode = kwargs.get('render_mode', None)
         self._desired_render_mode = render_mode
+        print(f"{self.xml=}")
+        # get from _get_obs
         mujoco_env.MujocoEnv.__init__(self, model_path=xml,
                                       frame_skip=4,
-                                      observation_space=Box(low=-np.inf, high=np.inf, shape=(135,), dtype=float),
+                                      # observation_space=Box(low=-np.inf, high=np.inf, shape=(135,), dtype=float),
+                                      observation_space=None,
                                       render_mode=None, )
         utils.EzPickle.__init__(self)
         if seed is not None:
             self.reset(seed=seed)
         else:
             self.reset()
+
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self._get_obs().shape), dtype=float)
+
 
     def step(self, a):
         posbefore = self.data.qpos[0]
