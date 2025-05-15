@@ -7,6 +7,7 @@ from src.agents.method2 import Method2Gnn
 from src.agents.ppo import PPO
 from src.utils.logger_config import set_run_id, get_logger
 from src.utils.analyse_data import plot_rewards_with_seeds
+from torch.profiler import profile, record_function, ProfilerActivity
 
 
 def run(hparam):
@@ -27,7 +28,37 @@ def run(hparam):
                               mask=actuator_mask,
                               device=device, **hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
-    model.learn()
+
+
+    # Set up profiler with both CPU and CUDA activities
+    profiler_activities = [ProfilerActivity.CPU]
+    if torch.cuda.is_available():
+        profiler_activities.append(ProfilerActivity.CUDA)
+
+    # Run with profiler
+    with profile(
+            activities=profiler_activities,
+            record_shapes=True,
+            profile_memory=True,  # Enable memory profiling
+            with_stack=True,  # Record stack trace for each operation
+            with_flops=True,  # Estimate FLOPS for each operation
+    ) as prof:
+        with record_function("model_training"):
+            model.learn()
+
+    # Print profiler results sorted by different metrics
+    print("\n--- Profiler Results (sorted by CPU time) ---")
+    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
+
+    if torch.cuda.is_available():
+        print("\n--- Profiler Results (sorted by CUDA time) ---")
+        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+
+        print("\n--- Profiler Results (sorted by CUDA memory usage) ---")
+        print(prof.key_averages().table(sort_by="self_cuda_memory_usage", row_limit=20))
+
+        print("\n--- Profiler Results (sorted by CUDA memory allocation size) ---")
+        print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=20))
 
 
 def view_model_demo(model_path, hparam):
