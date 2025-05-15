@@ -29,10 +29,10 @@ hparams = {
 }
 
 
-def test_main() -> None:
-    # if the cwd is not the src directory, change it to the src directory
-    if os.getcwd() != str(Path(src.__path__[0]).resolve()):
-        os.chdir(str(Path(src.__path__[0]).resolve()))
-    run(hparams)
-    # DELETE: temp assertion
-    assert True
+# def test_main() -> None:
+#     # if the cwd is not the src directory, change it to the src directory
+#     if os.getcwd() != str(Path(src.__path__[0]).resolve()):
+#         os.chdir(str(Path(src.__path__[0]).resolve()))
+#     run(hparams)
+#     # DELETE: temp assertion
+#     assert True

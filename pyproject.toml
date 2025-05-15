@@ -7,7 +7,7 @@ name = "gnn_robotics"
 dynamic = ["version"]
 description = ""
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.21.0",
     "pandas>=1.3.0",
@@ -15,6 +15,13 @@ dependencies = [
     "six>=1.17.0",
     "gymnasium>=1.1.1",
     "matplotlib>=3.10.1",
+    "pytest",
+    "torch",
+    "torch-geometric",
+    "yamllib",
+    "xmltodict",
+    "stable-baselines3",
+    "gymnasium[mujoco]",
 ]
  # Add only the directories you need as packages
 [tool.setuptools]
