@@ -1,9 +1,10 @@
 import torch
-import os,sys
+import os
 import multiprocessing as mp
 from src.utils.misc_utils import load_hparams
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
 from src.agents.function_approximators import MessagePassingGNN
+from src.agents.method2 import Method2Gnn
 from src.agents.ppo import PPO
 from src.utils.logger_config import set_run_id, get_logger
 from src.utils.analyse_data import plot_rewards_with_seeds
@@ -14,16 +15,17 @@ def run(hparam):
     set_run_id(hparam['run_id'])
     logger = get_logger()
     logger.info(f"Starting run with parameters: {hparam['run_id']}")
-    env = MujocoParser(**hparam).envs_train[0]
+    env_setup = MujocoParser(**hparam)
+    env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
     edges = create_edges(env, device)
     actuator_mask = check_actuators(env)
     env.reset()
     node_dim = 15
-    num_nodes = 9  
+    num_nodes = 9
     hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
-    actor = MessagePassingGNN(in_dim=node_dim, 
-                              num_nodes=num_nodes, 
-                              edge_index=edges, 
+    actor = MessagePassingGNN(in_dim=node_dim,
+                              num_nodes=num_nodes,
+                              edge_index=edges,
                               action_dim=1,
                               mask=actuator_mask,
                               device=device, **hparam)

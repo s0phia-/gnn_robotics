@@ -86,12 +86,12 @@ class PPO:
                 critic_loss = nn.MSELoss()(vv, batch_reward_to_go)
 
                 # backprop actor network
-                self.actor_optim.zero_grad()
+                self.actor_optim.zero_grad(set_to_none=True)
                 actor_loss.backward(retain_graph=True)
                 self.actor_optim.step()
 
                 # backprop critic network
-                self.critic_optim.zero_grad()
+                self.critic_optim.zero_grad(set_to_none=True)
                 critic_loss.backward()
                 self.critic_optim.step()
 

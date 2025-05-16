@@ -17,9 +17,6 @@ import re
 class MujocoParser:
     def __init__(self, **kwargs):
         self.__dict__.update((k, v) for k, v in kwargs.items())
-        print("Initializing MujocoParser with parameters: ", kwargs)
-        print("pwd = ",os.getcwd())
-        # Retrieve MuJoCo XML files for training
         envs_train_names = [self.env_name]
         self.morph_graphs = dict()
 
@@ -32,6 +29,8 @@ class MujocoParser:
         # sort envs acc to decreasing order of number of limbs (required due to issue in DummyVecEnv)
         order_idx = np.argsort([len(self.morph_graphs[env_name]) for env_name in envs_train_names])[::-1]
         envs_train_names = [envs_train_names[order] for order in order_idx]
+
+        self.num_nodes = len(self.morph_graphs[envs_train_names[0]])
 
         # Set up training env ================================================
         self.limb_obs_size, self.max_action = self.register_envs(envs_train_names, self.max_episodic_timesteps)
@@ -89,7 +88,7 @@ class MujocoParser:
                 copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
             params = {'xml': os.path.abspath(xml)}
             # register with gym (check how it works)
-            
+
             register(id=("%s-v0" % env_name),
                      max_episode_steps=max_episode_steps,
                      entry_point="src.environments.%s:ModularEnv" % env_file,
@@ -225,6 +224,7 @@ def get_motor_joints(xml_file):
 
 class IdentityWrapper(gym.Wrapper):
     """wrapper with useful attributes and helper functions"""
+
     def __init__(self, env):
         super(IdentityWrapper, self).__init__(env)
         self.num_limbs = self.env.unwrapped.model.nbody - 1
@@ -234,10 +234,11 @@ class IdentityWrapper(gym.Wrapper):
 
 class ModularEnvWrapper(gym.Wrapper):
     """
-    generating the graph 
+    generating the graph
     Force env to return fixed shape obs when called .reset() and .step() and removes action's padding before execution
     Also match the order of the actions returned by modular policy to the order of the environment actions
     """
+
     def __init__(self, env, obs_max_len=None):
         super(ModularEnvWrapper, self).__init__(env)
         # if no max length specified for obs, use the current env's obs size
@@ -246,28 +247,14 @@ class ModularEnvWrapper(gym.Wrapper):
         else:
             self.obs_max_len = self.env.observation_space.shape[0]
         self.action_len = self.env.action_space.shape[0]
-        self.num_limbs = self.env.unwrapped.model.nbody-1
+        self.num_limbs = self.env.unwrapped.model.nbody - 1
         self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.action_space.high[0])
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
 
-        self.action_mapping = self.initialize_action_mapping()
-
-    def initialize_action_mapping(self):
-        mapping = {}
-        for i in range(self.model.nu):  # nu is the number of actuators
-            actuator_id = i
-            joint_id = self.model.actuator_trnid[actuator_id, 0]
-            mapping[i] = joint_id - 1
-        return mapping
-
-    def step(self, action): # ordering introduced here
-        action = action[:self.num_limbs] # clip the 0-padding before processing
-        reordered_action = np.zeros_like(action)
-        for logical_idx, env_idx in self.action_mapping.items():
-            if logical_idx < len(action):
-                reordered_action[env_idx] = action[logical_idx]
+    def step(self, action):  # ordering introduced here
+        action = action[:self.num_limbs]  # clip the 0-padding before processing
         obs, reward, terminated, truncated, info = self.env.step(action)
         done = terminated or truncated
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
