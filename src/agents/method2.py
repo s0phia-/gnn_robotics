@@ -24,8 +24,6 @@ class Method2Gnn(MessagePassingGNN):
         x_morph, edge_index_morph = data.x, data.edge_index
         n = data.num_nodes
 
-        print(f"Number of nodes: {n}")
-
         batch = data.batch
         if batch is not None:
             edge_index_fc = torch.cat(
@@ -38,8 +36,6 @@ class Method2Gnn(MessagePassingGNN):
             del adj
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
-        print(f"Fully connected edges shape: {edge_index_fc.shape}")
 
         x = self.encoder(x=x_morph)
 

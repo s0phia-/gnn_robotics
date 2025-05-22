@@ -5,6 +5,7 @@ from src.utils.misc_utils import load_hparams
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
 from src.agents.function_approximators import MessagePassingGNN
 from src.agents.method2 import Method2Gnn
+from src.agents.method1 import Method1Gnn
 from src.agents.ppo import PPO
 from src.utils.logger_config import set_run_id, get_logger
 from src.utils.analyse_data import plot_rewards_with_seeds
@@ -28,7 +29,8 @@ def run(hparam):
                        edge_index=edges,
                        action_dim=1,
                        mask=actuator_mask,
-                       device=device, **hparam)
+                       device=device,
+                       **hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.learn()
 
@@ -50,9 +52,11 @@ if __name__ == '__main__':
     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
     if torch.cuda.is_available():
         mp.set_start_method('spawn', force=True)
-        pool = mp.Pool(processes=min(15, len(hparams)))
+        pool = mp.Pool(processes=min(8, len(hparams)))
         results = pool.map(run, hparams)
         pool.close()
         pool.join()
+    else:
+        run(hparams[0])
     # plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
     # view_model_demo(f'../runs/{hparams[0]["run_id"]}/checkpoints/propagation_steps-4_seed-6', hparams[0])
