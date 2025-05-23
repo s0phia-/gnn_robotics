@@ -61,7 +61,7 @@ class Gnnlayer(MessagePassing):
         return nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0)) #add self-loops (the so on prop the message form the node is considered)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
         return self.propagate(edge_index, x=x)
 
     def message(self, x_i, x_j):
@@ -162,6 +162,9 @@ class MessagePassingGNN(nn.Module):
         x = self.encoder(x=x)
         for i in range(self.propagation_steps):
             x = self.middle[i](x=x, edge_index=edge_index)
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         x = self.decoder(x=x)
         x = x.view(-1, self.num_nodes)

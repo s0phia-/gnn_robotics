@@ -16,18 +16,18 @@ total_timesteps: 1000000
 # GNN params
 propagation_steps:
   - 3
-#  - 4
-#  - 5
-#  - 6
+  - 4
+  - 5
+  - 6
 hidden_node_dim:
-#  - 32
+  - 32
   - 64
-#  - 128
+  - 128
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
   - 64
-#  - 128
-#  - 256
+  - 128
+  - 256
 
 #misc params
 seed: 6

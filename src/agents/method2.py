@@ -20,49 +20,6 @@ class Method2Gnn(MessagePassingGNN):
                                                  hidden_layers=self.decoder_and_message_layers,
                                                  device=device))
 
-    def forward(self, data):
-        x_morph, edge_index_morph = data.x, data.edge_index
-        n = data.num_nodes
-
-        batch = data.batch
-        if batch is not None:
-            edge_index_fc = torch.cat(
-                [torch.combinations(torch.where(batch == i)[0], 2).flip(1).repeat_interleave(2, dim=0).reshape(2, -1)
-                 for i in range(batch.max().item() + 1)], dim=1)
-        else:
-            adj = torch.ones(n, n, device=data.edge_index.device) - torch.eye(n, device=data.edge_index.device)
-            edge_index_fc, _ = dense_to_sparse(adj)
-
-            del adj
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-        x = self.encoder(x=x_morph)
-
-        for i in range(self.propagation_steps):
-            x = self.middle[i](x=x,
-                               edge_index_type1=edge_index_morph,
-                               edge_index_type2=edge_index_fc)
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        x = self.decoder(x=x)
-
-        x = x.view(-1, self.num_nodes)
-        x = x.squeeze(0)
-
-        if batch is not None:  # deals with when batch of graphs
-            num_graphs = batch.max().item() + 1
-            mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
-            x = x.view(-1)[mask]
-            x = x.view(num_graphs, x.shape[0] // num_graphs)
-            return x
-
-        else:  # Single graph case
-            x = x[self.mask]
-            return x
-
 
 class GnnLayerDoubleAgg(Gnnlayer):
     def __init__(self,
@@ -91,23 +48,21 @@ class GnnLayerDoubleAgg(Gnnlayer):
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim*2, hidden_size=out_dim, device=device)
 
-        self.current_edge_type = None
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
 
-    def forward(self, x: torch.Tensor, edge_index_type1: torch.Tensor, edge_index_type2: torch.Tensor):
-        self.current_edge_type = 1
-        agg_type1 = self.propagate(edge_index_type1, x=x)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        agg_type1 = self.propagate(edge_index, x=x, edge_type=1)
 
-        self.current_edge_type = 2
-        agg_type2 = self.propagate(edge_index_type2, x=x)
+        edge_index_fc, _ = dense_to_sparse(torch.ones(len(x), len(x), device=self.device))
+        agg_type2 = self.propagate(edge_index_fc, x=x, edge_type=2)
 
         combined_agg = torch.cat([agg_type1, agg_type2], dim=1)  # concatenate the aggregated messages
         updated_features = self.update_function(combined_agg, x)
-
         return updated_features
 
-    def message(self, x_i, x_j):
+    def message(self, x_i, x_j, edge_type):
         msg = torch.cat([x_i, x_j], dim=-1)
-        if self.current_edge_type == 1:
+        if edge_type == 1:
             return self.message_function_type1(msg)
-        else:  # edge_type == 2
+        if edge_type == 2:
             return self.message_function_type2(msg)

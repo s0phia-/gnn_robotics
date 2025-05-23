@@ -24,7 +24,7 @@ def run(hparam):
     actuator_mask = check_actuators(env)
     env.reset()
     hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
-    actor = Method2Gnn(in_dim=node_dim,
+    actor = Method1Gnn(in_dim=node_dim,
                        num_nodes=num_nodes,
                        edge_index=edges,
                        action_dim=1,
@@ -58,5 +58,6 @@ if __name__ == '__main__':
         pool.join()
     else:
         run(hparams[0])
-    # plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
+    plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
+    # plot_rewards_with_seeds(f'../runs/run_20250522_175111/results')
     # view_model_demo(f'../runs/{hparams[0]["run_id"]}/checkpoints/propagation_steps-4_seed-6', hparams[0])
