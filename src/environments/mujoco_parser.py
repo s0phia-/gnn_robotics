@@ -19,9 +19,6 @@ class MujocoParser:
     def __init__(self, **kwargs):
         self.xml_path = Path('environments/assets')
         self.__dict__.update((k, v) for k, v in kwargs.items())
-        print("Initializing MujocoParser with parameters: ", kwargs)
-        print("pwd = ",os.getcwd())
-        # Retrieve MuJoCo XML files for training
         envs_train_names = [self.env_name]
         self.morph_graphs = dict()
 

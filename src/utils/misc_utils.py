@@ -11,14 +11,11 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
     :param yaml_hparam_path: path to YAML hyperparameters
     :param num_seeds: number of different seeds to use
     """
-    print('setting up the run directory')
-    print(os.getcwd())
     run_dir = f"../runs/run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
     os.makedirs(run_dir, exist_ok=True)
     os.makedirs(f"{run_dir}/logs", exist_ok=True)
     os.makedirs(f"{run_dir}/checkpoints", exist_ok=True)
     os.makedirs(f"{run_dir}/results", exist_ok=True)
-    print(run_dir)
     with open(yaml_hparam_path, 'r') as f:
         hparam = yaml.safe_load(f)
 

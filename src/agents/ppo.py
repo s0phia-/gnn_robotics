@@ -1,5 +1,4 @@
 from src.utils.logger_config import get_logger
-from src.agents.function_approximators import make_graph, make_graph_batch
 import numpy as np
 import os
 import torch
@@ -7,8 +6,8 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 from time import sleep
-from src.agents.function_approximators import FeedForward
-
+import gc
+from src.agents.function_approximators import make_graph, make_graph_batch, FeedForward
 
 class PPO:
     """
@@ -39,7 +38,7 @@ class PPO:
         self.critic_optim = Adam(self.critic.parameters(), lr=float(self.lr))
 
         # initialise covariance matrix
-        self.cov_mat = self.cov_mat = torch.eye(self.action_dim, device=self.device) * 0.5
+        self.cov_mat = torch.eye(self.action_dim, device=self.device) * 0.5
 
         # set up file paths
         self.results_dir = f"{self.run_dir}/results/"
@@ -48,6 +47,10 @@ class PPO:
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.logger = get_logger(run_id=self.run_id, run_dir=self.run_dir)
 
+        # Memory management settings
+        self.memory_log_freq = 5  # Log memory usage every N iterations
+        self.memory_cleanup_freq = 2  # Clean memory every N iterations
+
     def learn(self):
         """
         PPO learning step. Nice description and pseudocode: https://spinningup.openai.com/en/latest/algorithms/ppo.html
@@ -55,7 +58,15 @@ class PPO:
         iters = int(0)
         t = 0
         rewards_history = []
+
+        if torch.cuda.is_available():
+            self.logger.info(f"Initial GPU memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB allocated, "
+                             f"{torch.cuda.memory_reserved() / 1024 ** 2:.2f} MB reserved")
+
         while t < int(self.total_timesteps):
+            if torch.cuda.is_available() and iters % self.memory_log_freq == 0:
+                self.logger.info(
+                    f"Iteration {iters} - Memory: {torch.cuda.memory_allocated() / 1024 ** 2:.2f} MB allocated")
 
             # perform a rollout
             batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
@@ -69,33 +80,50 @@ class PPO:
             iters += 1
 
             # find advantage, normalize
-            advantage_unnormalized = batch_reward_to_go - self.get_value(batch_obs).detach()
-            advantage = (advantage_unnormalized - advantage_unnormalized.mean()) / (advantage_unnormalized.std() + 1e-8)
+            with torch.no_grad():
+                advantage_unnormalized = batch_reward_to_go - self.get_value(batch_obs).detach()
+                advantage = (advantage_unnormalized - advantage_unnormalized.mean()) / (advantage_unnormalized.std() + 1e-8)
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
             # loop to update network
-            for _ in range(self.n_updates_per_iter):
+            for update_iter in range(self.n_updates_per_iter):
 
-                vv = self.get_value(batch_obs)
-                log_probs = self.get_action_log_probs(batch_obs, batch_actions)
-                action_prob_ratio = torch.exp(log_probs - batch_log_probs)
+                with torch.set_grad_enabled(True):
+                    log_probs = self.get_action_log_probs(batch_obs, batch_actions)
+                    action_prob_ratio = torch.exp(log_probs - batch_log_probs)
 
-                # calculate losses
-                surr_loss_1 = action_prob_ratio * advantage
-                surr_loss_2 = torch.clamp(action_prob_ratio, 1-self.clip_value, 1+self.clip_value) * advantage
-                actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
-                critic_loss = nn.MSELoss()(vv, batch_reward_to_go)
+                    # Calculate surrogate losses
+                    surr_loss_1 = action_prob_ratio * advantage
+                    surr_loss_2 = torch.clamp(action_prob_ratio, 1 - self.clip_value, 1 + self.clip_value) * advantage
+                    actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
 
-                # backprop actor network
-                self.actor_optim.zero_grad()
-                actor_loss.backward(retain_graph=True)
-                self.actor_optim.step()
+                    # Backprop actor network
+                    self.actor_optim.zero_grad(set_to_none=True)
+                    actor_loss.backward()
+                    self.actor_optim.step()
+                del log_probs, action_prob_ratio, surr_loss_1, surr_loss_2, actor_loss
 
-                # backprop critic network
-                self.critic_optim.zero_grad()
-                critic_loss.backward()
-                self.critic_optim.step()
+                with torch.set_grad_enabled(True):
+                    value_preds = self.get_value(batch_obs)
+                    critic_loss = nn.MSELoss()(value_preds, batch_reward_to_go)
 
-            self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
+                    self.critic_optim.zero_grad(set_to_none=True)
+                    critic_loss.backward()
+                    self.critic_optim.step()
+                if update_iter % 3 == 0 and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+            self.logger.info(f"Iteration {iters} - Loss: {critic_loss.item():.4f}, Avg reward: {avg_ep_reward:.4f}")
+
+            # Perform memory cleanup
+            if iters % self.memory_cleanup_freq == 0:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+
+            # Save results and model periodically
             if iters % self.save_model_freq == 0:
                 # track rewards
                 np.savetxt(f"{self.results_dir}/{self.run_id}.csv", rewards_history,
@@ -103,6 +131,9 @@ class PPO:
                 # save model
                 torch.save(self.actor.state_dict(), f"{self.checkpoint_dir}/ppo_actor.pth")
                 torch.save(self.critic.state_dict(), f"{self.checkpoint_dir}/ppo_critic.pth")
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
     def rollout(self):
         """
@@ -122,23 +153,33 @@ class PPO:
         while t < self.timesteps_per_batch:
             episode_rewards = []
             obs = self.env.reset()
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
             for ep_t in range(self.max_episodic_timesteps):
                 t += 1
-                batch_observations.append(obs)
-                obs_tensor = torch.tensor(obs, dtype=torch.float32, device=self.device)
-                action, log_prob = self.get_action(obs_tensor, calculate_log_probs=True)
-                obs, reward, terminated, truncated, _ = self.env.step(action)
+                batch_observations.append(obs.clone())
+                with torch.no_grad():
+                    action, log_prob = self.get_action(obs, calculate_log_probs=True)
+                next_obs, reward, terminated, truncated, _ = self.env.step(action)
+                obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
                 batch_actions.append(action)
-                batch_log_probs.append(log_prob.cpu().item())  # If log_prob is a scalar tensor
+                batch_log_probs.append(log_prob.cpu().item())
                 episode_rewards.append(reward)
                 if terminated or truncated:
                     break
+                if ep_t > 0 and ep_t % 1000 == 0 and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
             batch_lens.append(len(episode_rewards))
             batch_rewards.append(episode_rewards)
-        batch_observations = torch.tensor(np.array(batch_observations), dtype=torch.float, device=self.device)
+            if t % 1000 == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        observations_array = np.array([o.cpu().numpy() for o in batch_observations])
+        batch_observations = torch.tensor(observations_array, dtype=torch.float, device=self.device)
         batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float, device=self.device)
         batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float, device=self.device)
         batch_rewards_to_gos = self.get_reward_to_go(batch_rewards)
+        del observations_array
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens, batch_rewards
 
     def get_action(self, obs, calculate_log_probs=False):
@@ -148,19 +189,16 @@ class PPO:
         :param obs:observation to get action for
         :return: action, log probability of action (optional)
         """
-        # create an action distribution
         self.num_nodes = obs.shape[0]
         graph = make_graph(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
         mean_action = self.actor(graph)
         dist = MultivariateNormal(mean_action, self.cov_mat)
-        # sample action, find log prob of action
         action = dist.sample()
-        log_prob = dist.log_prob(action)
-
-        action_cpu = action.cpu()
+        log_prob = dist.log_prob(action) if calculate_log_probs else None
+        action_np = mean_action.cpu().detach().numpy()
         if calculate_log_probs:
-            return action_cpu.detach().numpy(), log_prob
-        return action_cpu.detach().numpy()
+            return action_np, log_prob.detach()
+        return action_np
 
     def get_reward_to_go(self, rewards):
         """
@@ -183,7 +221,8 @@ class PPO:
         :param obs: observation to calculate value for
         :return: observation values
         """
-        return self.critic(obs).squeeze()
+        with torch.set_grad_enabled(self.critic.training):
+            return self.critic(obs).squeeze()
 
     def get_action_log_probs(self, obs, actions):
         """
@@ -192,14 +231,17 @@ class PPO:
         :param actions: actions to calculate log probability for
         :return: log probabilities of actions
         """
-        graph_batch = make_graph_batch(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
-        batch_action = self.actor(graph_batch)
-        dist = MultivariateNormal(batch_action, self.cov_mat)
-        log_probs = dist.log_prob(actions)
-
+        with torch.set_grad_enabled(True):
+            graph_batch = make_graph_batch(obs, self.graph_info['num_nodes'], edge_index=self.graph_info['edge_idx'])
+            batch_action = self.actor(graph_batch)
+            dist = MultivariateNormal(batch_action, self.cov_mat)
+            log_probs = dist.log_prob(actions)
         return log_probs
 
     def demo(self, actor_path, critic_path):
+        """
+        Run a demo of the trained model.
+        """
         self.actor.load_state_dict(torch.load(actor_path))
         self.critic.load_state_dict(torch.load(critic_path))
         self.actor.eval()
@@ -208,7 +250,10 @@ class PPO:
         obs = env.reset()
         for _ in range(100):
             obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
-            action = self.get_action(obs)
+            with torch.no_grad():
+                action = self.get_action(obs)
             obs, reward, terminated, truncated, _ = env.step(action)
             env.render()
             sleep(.1)
+            if terminated or truncated:
+                obs = env.reset()
