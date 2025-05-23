@@ -20,6 +20,7 @@ def run(hparam):
     logger.info(f"Starting run with parameters: {hparam['run_id']}")
     env_setup = MujocoParser(**hparam)
     env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
+    print(f"{env=}, {node_dim=}, {num_nodes=}")
     edges = create_edges(env, device)
     actuator_mask = check_actuators(env)
     env.reset()

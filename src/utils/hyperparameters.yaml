@@ -40,4 +40,3 @@ xml_path: 'environments/assets'
 env_dir: './environments'
 base_modular_env_path: './environments/ModularEnv.py'
 data_dir: './results'
-
