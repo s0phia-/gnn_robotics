@@ -1,9 +1,48 @@
+"""
+# Neural Network and Graph Neural Network (GNN) Implementation
+
+This script implements a set of neural network components and utilities for building 
+and working with Graph Neural Networks (GNNs). The architecture is inspired by the 
+NerveNet Message Passing GNN framework. The script includes the following components:
+
+## Components:
+1. **Encoder**: A neural network that encodes input features into a hidden representation.
+2. **Gnnlayer**: A message-passing layer for GNNs, implementing the message and update functions.
+3. **Decoder**: A neural network that decodes hidden representations into output actions.
+4. **MessagePassingGNN**: A complete GNN architecture combining the encoder, message-passing layers, and decoder.
+5. **FeedForward**: A simple feedforward neural network for non-graph-based tasks.
+6. **Graph Utilities**:
+    - `make_graph`: Converts observations into a PyTorch Geometric graph.
+    - `make_graph_batch`: Creates a batch of graphs from a batch of observations.
+    - `graph_to_action`: Converts a graph representation into an action vector.
+
+## Dependencies:
+- PyTorch
+- PyTorch Geometric
+
+## Usage:
+This script is designed to be used as part of a larger robotics or reinforcement learning framework 
+where graph-based representations of environments or agents are required.
+
+## Classes and Functions:
+- `Encoder`: Encodes input features into a hidden representation.
+- `Gnnlayer`: Implements a single message-passing layer for GNNs.
+- `Decoder`: Decodes hidden representations into output actions.
+- `MessagePassingGNN`: Combines encoder, GNN layers, and decoder into a full GNN architecture.
+- `FeedForward`: Implements a simple feedforward neural network.
+- `make_graph`: Converts observations into a PyTorch Geometric graph.
+- `make_graph_batch`: Creates a batch of graphs from a batch of observations.
+- `graph_to_action`: Converts a graph representation into an action vector.
+
+"""
 import torch
 import numpy as np
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
 from torch_geometric.data import Data, Batch
+
+from .GAT import GAT
 
 
 class Encoder(nn.Module):
@@ -144,11 +183,17 @@ class MessagePassingGNN(nn.Module):
 
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
-            self.middle.append(Gnnlayer(in_dim=self.hidden_node_dim,
-                                          out_dim=self.hidden_node_dim,
-                                          hidden_dim=self.decoder_and_message_hidden_dim,
-                                          hidden_layers=self.decoder_and_message_layers,
-                                          device=device))
+            if self.gnn_layer_type == 'GAT':
+                self.middle.append(GAT(in_channels=self.hidden_node_dim,
+                                       out_channels=self.hidden_node_dim,
+                                       heads=self.gnn_heads,
+                                       device=device))
+            elif self.gnn_layer_type == 'default':
+                self.middle.append(Gnnlayer(in_dim=self.hidden_node_dim,
+                                            out_dim=self.hidden_node_dim,
+                                            hidden_dim=self.decoder_and_message_hidden_dim,
+                                            hidden_layers=self.decoder_and_message_layers,
+                                            device=device))
 
         self.decoder = Decoder(out_dim=action_dim,
                                in_dim=self.hidden_node_dim,

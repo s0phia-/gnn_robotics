@@ -13,6 +13,12 @@ n_updates_per_iter: 10
 timesteps_per_batch: 2048
 total_timesteps: 1000000
 
+# GNN layer type 
+gnn_layer_type:
+  - 'GAT'
+# - 'default'
+
+
 # GNN params
 propagation_steps:
   - 3
