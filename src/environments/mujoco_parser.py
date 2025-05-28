@@ -2,6 +2,7 @@
 ### edited from https://github.com/tommasomarzi/fgrl ###
 ########################################################
 
+from pathlib import Path
 import xmltodict
 import os
 from gymnasium.envs.registration import register
@@ -16,6 +17,7 @@ import re
 
 class MujocoParser:
     def __init__(self, **kwargs):
+        self.xml_path = Path('environments/assets')
         self.__dict__.update((k, v) for k, v in kwargs.items())
         envs_train_names = [self.env_name]
         self.morph_graphs = dict()
@@ -88,6 +90,10 @@ class MujocoParser:
                 copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
             params = {'xml': os.path.abspath(xml)}
             # register with gym (check how it works)
+
+            print(f"env registry params:")
+            for k, v in params.items():
+                print(f"\t{k}: {v}")
             
             register(id=("%s-v0" % env_name),
                      max_episode_steps=max_episode_steps,
@@ -229,6 +235,11 @@ class IdentityWrapper(gym.Wrapper):
         self.num_limbs = self.env.unwrapped.model.nbody - 1
         self.limb_obs_size = self.env.unwrapped.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.unwrapped.action_space.high[0])
+        print(f"{self.limb_obs_size=}")
+        print(f"{self.max_action=}")
+        print(f"{self.num_limbs=}")
+        print(f"self.env.unwrapped.model.nbody: {self.env.unwrapped.model.nbody}")
+        print(f"{self.env.unwrapped.observation_space.shape=}")
 
 
 class ModularEnvWrapper(gym.Wrapper):
@@ -248,25 +259,15 @@ class ModularEnvWrapper(gym.Wrapper):
         self.num_limbs = self.env.unwrapped.model.nbody-1
         self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.action_space.high[0])
+        print(f"{self.obs_max_len=}")
+        print(f"{self.limb_obs_size=}")
+        print(f"{self.max_action=}")
+
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
 
-        self.action_mapping = self.initialize_action_mapping()
-
-    def initialize_action_mapping(self):
-        mapping = {}
-        for i in range(self.model.nu):  # nu is the number of actuators
-            actuator_id = i
-            joint_id = self.model.actuator_trnid[actuator_id, 0]
-            mapping[i] = joint_id - 1
-        return mapping
-
     def step(self, action): # ordering introduced here
         action = action[:self.num_limbs] # clip the 0-padding before processing
-        reordered_action = np.zeros_like(action)
-        for logical_idx, env_idx in self.action_mapping.items():
-            if logical_idx < len(action):
-                reordered_action[env_idx] = action[logical_idx]
         obs, reward, terminated, truncated, info = self.env.step(action)
         done = terminated or truncated
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(

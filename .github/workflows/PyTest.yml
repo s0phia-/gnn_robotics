@@ -1,0 +1,46 @@
+name: PyTest
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Run Python Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set-Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+
+      - name: Cache virtualenv
+        id: cache-venv
+        uses: actions/cache@v3
+        with:
+          path: .env
+          key: ${{ runner.os }}-venv-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-
+
+      - name: Install Package and Dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .env           # create virtualenv on miss
+          . .env/bin/activate
+          python -m pip install --upgrade pip setuptools wheel pytest
+          pip install -e .              # install package into .env
+
+      - name: Test with PyTest
+        run: |
+          . .env/bin/activate           # re-activate venv
+          pytest
