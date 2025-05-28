@@ -1,4 +1,4 @@
-import torch
+import shutil
 import os
 import datetime
 import yaml
@@ -16,6 +16,10 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
     os.makedirs(f"{run_dir}/logs", exist_ok=True)
     os.makedirs(f"{run_dir}/checkpoints", exist_ok=True)
     os.makedirs(f"{run_dir}/results", exist_ok=True)
+
+    yaml_filename = os.path.basename(yaml_hparam_path)
+    shutil.copy2(yaml_hparam_path, os.path.join(run_dir, yaml_filename))
+
     with open(yaml_hparam_path, 'r') as f:
         hparam = yaml.safe_load(f)
 
