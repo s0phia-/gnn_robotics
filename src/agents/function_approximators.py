@@ -44,6 +44,7 @@ class Gnnlayer(MessagePassing):
         :param device:
         """
         super().__init__(aggr=aggregator_type)
+        self.device = device
 
         # construct message function
         self.message_function = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
@@ -68,18 +69,18 @@ class Gnnlayer(MessagePassing):
         """
         Message passing involves aggregating information from neighboring nodes.
         For a given edge (i, j), where i is the target node and j is the source node:
-        
+
         - x_i: Features of the target node i.
         - x_j: Features of the source node j.
-        
+
         The message function computes a message m_ij as:
-        
+
         m_ij = f_message([x_i || x_j])
-        
+
         where:
         - [x_i || x_j] denotes the concatenation of x_i and x_j.
         - f_message is a neural network (here, self.message_function).
-        
+
         These messages are then aggregated by mean for all neighbors of node i.
         """
         msg = torch.cat([x_i, x_j], dim=-1)
@@ -137,6 +138,7 @@ class MessagePassingGNN(nn.Module):
         self.num_nodes = num_nodes
         self.mask = torch.tensor(mask, dtype=torch.bool)
         self.node_feature_dim = in_dim
+        self.device=device
 
         self.encoder = Encoder(in_dim=in_dim,
                                hidden_dim=self.hidden_node_dim,
