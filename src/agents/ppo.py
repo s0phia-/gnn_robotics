@@ -85,7 +85,7 @@ class PPO:
 
                 # backprop actor network
                 self.actor_optim.zero_grad(set_to_none=True)
-                actor_loss.backward(retain_graph=True)
+                actor_loss.backward()
                 self.actor_optim.step()
 
                 # backprop critic network
@@ -101,6 +101,9 @@ class PPO:
                 # save model
                 torch.save(self.actor.state_dict(), f"{self.checkpoint_dir}/ppo_actor.pth")
                 torch.save(self.critic.state_dict(), f"{self.checkpoint_dir}/ppo_critic.pth")
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
     def rollout(self):
         """
