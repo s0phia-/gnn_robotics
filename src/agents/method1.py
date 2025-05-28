@@ -46,29 +46,27 @@ class GnnLayerDoubleMessage(Gnnlayer):
         self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
         self.message_function_type2 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
 
-    def forward(self, x: torch.Tensor, edge_index_type1: torch.Tensor, edge_index_type2: torch.Tensor):
-        self.current_edge_type = 1
-        msg_type1 = self._get_messages(x, edge_index_type1)
-        self.current_edge_type = 2
-        msg_type2 = self._get_messages(x, edge_index_type2)
+    def forward(self, x: torch.Tensor, edge_morph: torch.Tensor, edge_fc: torch.Tensor) -> torch.Tensor:
 
-        # Combine edge indices and messages
-        combined_edge_index = torch.cat([edge_index_type1, edge_index_type2], dim=1)
-        combined_messages = torch.cat([msg_type1, msg_type2], dim=0)
+        edge_morph, _ = add_self_loops(edge_morph, num_nodes=x.size(0))
+        msg_morph = self._get_messages(x, edge_morph, 1)
+        msg_fc = self._get_messages(x, edge_fc, 2)
 
-        # Aggregate combined messages
+        combined_edge_index = torch.cat([edge_morph, edge_fc], dim=1)
+        combined_messages = torch.cat([msg_morph, msg_fc], dim=0)
+
         aggr_out = scatter(combined_messages, combined_edge_index[1], dim=0, reduce=self.aggr, dim_size=x.size(0))
 
         return self.update_function(aggr_out, x)
 
-    def _get_messages(self, x, edge_index):
+    def _get_messages(self, x, edge_index, edge_type):
         """Get raw messages for given edge index without aggregation"""
         row, col = edge_index
-        return self.message(x[row], x[col])
+        return self.message(x[row], x[col], edge_type)
 
-    def message(self, x_i, x_j):
+    def message(self, x_i, x_j, edge_type):
         msg = torch.cat([x_i, x_j], dim=-1)
-        if self.current_edge_type == 1:
+        if edge_type == 1:
             return self.message_function_type1(msg)
-        else:  # edge_type == 2
+        if edge_type == 2:
             return self.message_function_type2(msg)
