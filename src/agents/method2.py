@@ -78,7 +78,6 @@ class GnnLayerDoubleAgg(Gnnlayer):
         :param device:
         """
         super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device, aggregator_type)
-        self.device = device
 
         # construct message functions
         self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim * 2, hidden_layers, device)
