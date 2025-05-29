@@ -14,11 +14,15 @@ timesteps_per_batch: 2048
 total_timesteps: 1000000
 
 # GNN params
+method:
+  - method1
+  - method2
+  - method5
 propagation_steps:
   - 3
   - 4
   - 5
-  - 6
+#  - 6
 hidden_node_dim:
   - 32
   - 64
