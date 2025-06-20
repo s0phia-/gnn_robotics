@@ -43,7 +43,7 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
                 hparams[param_name] = combination[i]
             hparams['seed'] = seed
             run_id = ",".join([f"{param_name}-{combination[i]}" for i, param_name in enumerate(param_names)])
-            run_id += f"_seed-{seed}"
+            run_id += f",seed-{seed}"
             hparams['run_id'] = run_id
             hparams['run_dir'] = run_dir
             all_combinations.append(hparams)
@@ -59,6 +59,8 @@ def load_agent_and_env(hparam):
         agent = Method2Gnn
     elif method == "method5":
         agent = Method5Gnn
+    elif method == "NerveNet":
+        agent = NerveNet
     else:
         raise ValueError(f"Method {method} not implemented")
     env_setup = MujocoParser(**hparam)
