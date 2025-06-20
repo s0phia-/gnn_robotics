@@ -156,6 +156,7 @@ class PPO:
         dist = MultivariateNormal(mean_action, self.cov_mat)
         # sample action, find log prob of action
         action = dist.sample()
+        action = torch.clamp(action, self.env.action_space.low, self.env.action_space.high)  # clip action
         log_prob = dist.log_prob(action)
 
         action_cpu = action.cpu()
