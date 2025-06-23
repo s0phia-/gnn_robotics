@@ -20,6 +20,8 @@ hparams = {
     "hidden_node_dim": 64,
     "decoder_and_message_layers": 2,
     "decoder_and_message_hidden_dim": 64,
+    "morphology_fc_ratio": .5,
+    "method": "method2",
     "seed": 6,
     "save_model_freq": 10000000000,
     # "xml_path": "environments/assets",
@@ -57,3 +59,20 @@ def test_ant_env() -> None:
     # MujocoParser(**hparams)
     run(hparams)
 
+def test_method1() -> None:
+    if os.getcwd() != str(Path(src.__path__[0]).resolve()):
+        os.chdir(str(Path(src.__path__[0]).resolve()))
+    hparams["method"] = "method1"
+    run(hparams)
+
+def test_method2() -> None:
+    if os.getcwd() != str(Path(src.__path__[0]).resolve()):
+        os.chdir(str(Path(src.__path__[0]).resolve()))
+    hparams["method"] = "method2"
+    run(hparams)
+
+def test_nervenet() -> None:
+    if os.getcwd() != str(Path(src.__path__[0]).resolve()):
+        os.chdir(str(Path(src.__path__[0]).resolve()))
+    hparams["method"] = "NerveNet"
+    run(hparams)
