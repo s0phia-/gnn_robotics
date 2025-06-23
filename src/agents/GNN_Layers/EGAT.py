@@ -18,14 +18,13 @@ from torch_geometric.utils import add_self_loops, softmax, dropout, degree
 from torch_geometric.utils import from_networkx
 
 
-class EGAT_tunedContribution(MessagePassing):
+class EGAT(MessagePassing):
     """"
     Edge-Featured Graph Attention Network 
 
     my implementation of the EGAT proposed in doi:10.1007/978-3-030-86362-2_21
     
     """
-
     def __init__(self, 
                  node_in_channels, 
                  node_out_channels, 
@@ -37,7 +36,7 @@ class EGAT_tunedContribution(MessagePassing):
                  dropout=0.0,
                  add_self_loops=False,
                  edge_contribution=0.5):
-        super(EGAT_tunedContribution, self).__init__(aggr='add')
+        super(EGAT, self).__init__(aggr='add')
         # general params initialisation
         self.node_in_channels = node_in_channels
         self.node_out_channels = node_out_channels
