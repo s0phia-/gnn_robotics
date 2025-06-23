@@ -1,7 +1,33 @@
-import os
-import torch
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import os
+
+# Add project root to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(project_root)
+
+# Debug information
+print(f"Current working directory: {os.getcwd()}")
+print(f"Project root: {project_root}")
+print(f"Python path: {sys.path}")
+print(f"Contents of project root: {os.listdir(project_root)}")
+
+# Check if src directory exists and what's in it
+src_path = os.path.join(project_root, 'src')
+if os.path.exists(src_path):
+    print(f"Contents of src: {os.listdir(src_path)}")
+    utils_path = os.path.join(src_path, 'utils')
+    if os.path.exists(utils_path):
+        print(f"Contents of src/utils: {os.listdir(utils_path)}")
+    else:
+        print("src/utils directory does not exist!")
+else:
+    print("src directory does not exist!")
+
+# Now try the import
+from src.utils.misc_utils import load_hparams, load_agent_and_env
+
+
+import torch
 import multiprocessing as mp
 from src.utils.misc_utils import load_hparams, load_agent_and_env
 from src.agents.ppo import PPO
