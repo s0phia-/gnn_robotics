@@ -19,7 +19,8 @@ class Method1Gnn(Method2Gnn):
                                                      out_dim=self.hidden_node_dim,
                                                      hidden_dim=self.decoder_and_message_hidden_dim,
                                                      hidden_layers=self.decoder_and_message_layers,
-                                                     device=device))
+                                                     device=device,
+                                                     morph_weight=self.morphology_fc_ratio))
 
 
 class GnnLayerDoubleMessage(Gnnlayer):
@@ -29,7 +30,8 @@ class GnnLayerDoubleMessage(Gnnlayer):
                  hidden_dim: int,
                  hidden_layers: int,
                  device: torch.device,
-                 aggregator_type: str = 'mean'):
+                 aggregator_type: str = 'mean',
+                 morph_weight: float = .5,):
         """
         Message passing GNN layer with two edge types, each aggregated separately and then combined in an update
         function which now takes the form h_{t+1} = U(h_t, agg1, agg2) where agg1 and agg2 are the separately aggregated
@@ -42,7 +44,7 @@ class GnnLayerDoubleMessage(Gnnlayer):
         :param morph_weight: morphology weighting. Fully connected weighting will be 1-morph_weight
         """
         super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device, aggregator_type)
-        self.morph_weight = self.morphology_fc_ratio
+        self.morph_weight = morph_weight
 
         # construct message functions
         self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
