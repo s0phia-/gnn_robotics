@@ -8,6 +8,7 @@ from torch.distributions import MultivariateNormal
 from time import sleep
 from src.agents.function_approximators import make_graph, make_graph_batch, FeedForward
 
+
 class PPO:
     """
     Implementation of Proximal Policy Optimization.
@@ -149,14 +150,13 @@ class PPO:
         :param obs:observation to get action for
         :return: action, log probability of action (optional)
         """
-        # create an action distribution
         self.num_nodes = obs.shape[0]
         graph = make_graph(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
         mean_action = self.actor(graph)
         dist = MultivariateNormal(mean_action, self.cov_mat)
-        # sample action, find log prob of action
         action = dist.sample()
-        action = torch.clamp(action, self.env.action_space.low, self.env.action_space.high)  # clip action
+        action = torch.clamp(action, torch.tensor(self.env.action_space.low, device=self.device),  # clip action
+                             torch.tensor(self.env.action_space.high, device=self.device))
         log_prob = dist.log_prob(action)
 
         action_cpu = action.cpu()
