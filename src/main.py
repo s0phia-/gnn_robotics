@@ -1,5 +1,6 @@
 import os
 import torch
+import sys
 import multiprocessing as mp
 from src.utils.misc_utils import load_hparams, load_agent_and_env
 from src.agents.ppo import PPO
@@ -20,7 +21,8 @@ def run(hparam):
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=8)
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
     if torch.cuda.is_available():
         mp.set_start_method('spawn', force=True)
         pool = mp.Pool(processes=min(6, len(hparams)))
