@@ -20,27 +20,12 @@ def run(hparam):
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=10)
+    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=8)
     if torch.cuda.is_available():
         mp.set_start_method('spawn', force=True)
-        pool = mp.Pool(processes=min(4, len(hparams)))
+        pool = mp.Pool(processes=min(6, len(hparams)))
         results = pool.map(run, hparams)
         pool.close()
         pool.join()
-    hparams = load_hparams(os.path.join('utils', 'h2.yaml'), num_seeds=10)
-    if torch.cuda.is_available():
-        mp.set_start_method('spawn', force=True)
-        pool = mp.Pool(processes=min(4, len(hparams)))
-        results = pool.map(run, hparams)
-        pool.close()
-        pool.join()
-    hparams = load_hparams(os.path.join('utils', 'h3.yaml'), num_seeds=10)
-    if torch.cuda.is_available():
-        mp.set_start_method('spawn', force=True)
-        pool = mp.Pool(processes=min(4, len(hparams)))
-        results = pool.map(run, hparams)
-        pool.close()
-        pool.join()
-
     # plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
     # plot_rewards_with_seeds(f'../runs/best')

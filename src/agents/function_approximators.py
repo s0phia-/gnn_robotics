@@ -138,7 +138,7 @@ class MessagePassingGNN(nn.Module):
         self.num_nodes = num_nodes
         self.mask = torch.tensor(mask, dtype=torch.bool)
         self.node_feature_dim = in_dim
-        self.device=device
+        self.device = device
 
         self.encoder = Encoder(in_dim=in_dim,
                                hidden_dim=self.hidden_node_dim,
@@ -147,10 +147,10 @@ class MessagePassingGNN(nn.Module):
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(Gnnlayer(in_dim=self.hidden_node_dim,
-                                          out_dim=self.hidden_node_dim,
-                                          hidden_dim=self.decoder_and_message_hidden_dim,
-                                          hidden_layers=self.decoder_and_message_layers,
-                                          device=device))
+                                        out_dim=self.hidden_node_dim,
+                                        hidden_dim=self.decoder_and_message_hidden_dim,
+                                        hidden_layers=self.decoder_and_message_layers,
+                                        device=device))
 
         self.decoder = Decoder(out_dim=action_dim,
                                in_dim=self.hidden_node_dim,
@@ -167,18 +167,18 @@ class MessagePassingGNN(nn.Module):
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        
+
         x = self.decoder(x=x)
         x = x.view(-1, self.num_nodes)
         x = x.squeeze(0)
-        
+
         if batch is not None:  # deals with when batch of graphs
             num_graphs = batch.max().item() + 1
             mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
             x = x.view(-1)[mask]
             x = x.view(num_graphs, x.shape[0] // num_graphs)
             return x
-        
+
         else:  # Single graph case
             x = x[self.mask]
             return x
@@ -198,7 +198,6 @@ def make_graph_batch(obs_batch, num_nodes, edge_index):
         x = obs.view(num_nodes, -1)
         graph = Data(x=x, edge_index=edge_index)
         data_list.append(graph)
-
     return Batch.from_data_list(data_list)
 
 

@@ -76,8 +76,10 @@ class GnnLayerDoubleAgg(Gnnlayer):
         :param update_hidden_layers:
         :param update_hidden_dim:
         :param device:
+        :param morph_weight: morphology weighting. Fully connected weighting will be 1-morph_weight
         """
         super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device, aggregator_type)
+        self.morph_weight = self.morphology_fc_ratio
 
         # construct message functions
         self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim * 2, hidden_layers, device)
@@ -99,7 +101,7 @@ class GnnLayerDoubleAgg(Gnnlayer):
 
     def message(self, x_i, x_j, edge_type):
         msg = torch.cat([x_i, x_j], dim=-1)
-        if edge_type == 1:
-            return self.message_function_type1(msg)
-        if edge_type == 2:
-            return self.message_function_type2(msg)
+        if edge_type == 1:  # morphology respecting
+            return self.message_function_type1(msg)*self.morph_weight
+        if edge_type == 2:  # fully connected
+            return self.message_function_type2(msg)*(1-self.morph_weight)
