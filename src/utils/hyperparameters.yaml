@@ -1,7 +1,7 @@
 #env params
 env_name:
   - ant
-max_episodic_timesteps: 1000
+max_episodic_timesteps: 2000
 population_size: 8
 enable_features: True
 
@@ -11,9 +11,13 @@ gamma: 0.95
 clip_value: 0.1
 n_updates_per_iter: 10
 timesteps_per_batch: 2048
-total_timesteps: 1000000
+total_timesteps: 2000000
 
 # GNN params
+method:
+  - method1
+#  - method2
+#  - method5
 propagation_steps:
   - 3
 #  - 4
@@ -25,12 +29,20 @@ hidden_node_dim:
 #  - 128
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
-  - 64
-#  - 128
+#  - 64
+  - 128
 #  - 256
+morphology_fc_ratio:
+  - 0
+  - .2
+  - .4
+#  - .5
+  - .6
+  - .8
+  - 1
 
 #misc params
-seed: 6
+seed: 1
 
 #boring params
 save_model_freq: 10

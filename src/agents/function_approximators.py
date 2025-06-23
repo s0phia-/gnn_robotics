@@ -44,6 +44,7 @@ class Gnnlayer(MessagePassing):
         :param device:
         """
         super().__init__(aggr=aggregator_type)
+        self.device = device
 
         # construct message function
         self.message_function = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
@@ -61,25 +62,25 @@ class Gnnlayer(MessagePassing):
         return nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0)) #add self-loops (the so on prop the message form the node is considered)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
         return self.propagate(edge_index, x=x)
 
     def message(self, x_i, x_j):
         """
         Message passing involves aggregating information from neighboring nodes.
         For a given edge (i, j), where i is the target node and j is the source node:
-        
+
         - x_i: Features of the target node i.
         - x_j: Features of the source node j.
-        
+
         The message function computes a message m_ij as:
-        
+
         m_ij = f_message([x_i || x_j])
-        
+
         where:
         - [x_i || x_j] denotes the concatenation of x_i and x_j.
         - f_message is a neural network (here, self.message_function).
-        
+
         These messages are then aggregated by mean for all neighbors of node i.
         """
         msg = torch.cat([x_i, x_j], dim=-1)
@@ -137,6 +138,7 @@ class MessagePassingGNN(nn.Module):
         self.num_nodes = num_nodes
         self.mask = torch.tensor(mask, dtype=torch.bool)
         self.node_feature_dim = in_dim
+        self.device = device
 
         self.encoder = Encoder(in_dim=in_dim,
                                hidden_dim=self.hidden_node_dim,
@@ -145,10 +147,10 @@ class MessagePassingGNN(nn.Module):
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(Gnnlayer(in_dim=self.hidden_node_dim,
-                                          out_dim=self.hidden_node_dim,
-                                          hidden_dim=self.decoder_and_message_hidden_dim,
-                                          hidden_layers=self.decoder_and_message_layers,
-                                          device=device))
+                                        out_dim=self.hidden_node_dim,
+                                        hidden_dim=self.decoder_and_message_hidden_dim,
+                                        hidden_layers=self.decoder_and_message_layers,
+                                        device=device))
 
         self.decoder = Decoder(out_dim=action_dim,
                                in_dim=self.hidden_node_dim,
@@ -162,18 +164,21 @@ class MessagePassingGNN(nn.Module):
         x = self.encoder(x=x)
         for i in range(self.propagation_steps):
             x = self.middle[i](x=x, edge_index=edge_index)
-        
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         x = self.decoder(x=x)
         x = x.view(-1, self.num_nodes)
         x = x.squeeze(0)
-        
+
         if batch is not None:  # deals with when batch of graphs
             num_graphs = batch.max().item() + 1
             mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
             x = x.view(-1)[mask]
             x = x.view(num_graphs, x.shape[0] // num_graphs)
             return x
-        
+
         else:  # Single graph case
             x = x[self.mask]
             return x
@@ -193,7 +198,6 @@ def make_graph_batch(obs_batch, num_nodes, edge_index):
         x = obs.view(num_nodes, -1)
         graph = Data(x=x, edge_index=edge_index)
         data_list.append(graph)
-
     return Batch.from_data_list(data_list)
 
 

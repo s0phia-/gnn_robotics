@@ -59,3 +59,20 @@ def test_ant_env() -> None:
     # MujocoParser(**hparams)
     run(hparams)
 
+def test_method1() -> None:
+    if os.getcwd() != str(Path(src.__path__[0]).resolve()):
+        os.chdir(str(Path(src.__path__[0]).resolve()))
+    hparams["method"] = "method1"
+    run(hparams)
+
+def test_method2() -> None:
+    if os.getcwd() != str(Path(src.__path__[0]).resolve()):
+        os.chdir(str(Path(src.__path__[0]).resolve()))
+    hparams["method"] = "method2"
+    run(hparams)
+
+def test_nervenet() -> None:
+    if os.getcwd() != str(Path(src.__path__[0]).resolve()):
+        os.chdir(str(Path(src.__path__[0]).resolve()))
+    hparams["method"] = "NerveNet"
+    run(hparams)
