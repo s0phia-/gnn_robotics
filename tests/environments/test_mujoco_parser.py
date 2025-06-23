@@ -21,7 +21,7 @@ hparams = {
     "decoder_and_message_layers": 2,
     "decoder_and_message_hidden_dim": 64,
     "morphology_fc_ratio": .5,
-    "method": "method2",
+    "method": "method1",
     "seed": 6,
     "save_model_freq": 10000000000,
     # "xml_path": "environments/assets",
