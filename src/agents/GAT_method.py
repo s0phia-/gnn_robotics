@@ -1,7 +1,7 @@
 from src.agents.function_approximators import *
 from torch_geometric.utils import dense_to_sparse
 
-from GNN_Layers.GAT import GAT
+from src.agents.GNN_Layers.GAT import GAT
 
 class GAT_Method(MessagePassingGNN):
     def __init__(self,

@@ -88,8 +88,8 @@ class GAT(MessagePassing):
         alpha = F.dropout(alpha, p=self.dropout)#, training=self.training)  # unchanged
         alpha = alpha.view(-1, self.heads, 1)
 
-        print("alpha shape after softmax ", alpha.shape)
-        print("x_j shape before reshape ", x_j.shape)
+        # print("alpha shape after softmax ", alpha.shape)
+        # print("x_j shape before reshape ", x_j.shape)
         x_j = (alpha * x_j).view(-1, self.heads * self.out_channels)
         # x_j = x_j.view(-1, self.heads*self.out_channels)  # changed: apply attention weights to target embeddings
         return  x_j 

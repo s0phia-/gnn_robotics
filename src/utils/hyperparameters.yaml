@@ -17,8 +17,18 @@ total_timesteps: 2000000
 method:
 #  - method1
 #  - method2
+#  - method3
 #  - method5
-  - NerveNet
+- NerveNet
+
+# Attention params
+num_heads:
+- 5
+negative_slope:
+- 0.2
+dropout:
+- 0.0
+
 propagation_steps:
   - 3
 #  - 4

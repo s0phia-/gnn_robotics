@@ -57,6 +57,8 @@ def load_agent_and_env(hparam):
         agent = Method1Gnn
     elif method == "method2":
         agent = Method2Gnn
+    elif method == "method3":
+        agent = GAT_Method 
     elif method == "method5":
         agent = Method5Gnn
     elif method == "NerveNet":
