@@ -1,6 +1,8 @@
-import sys
 import os
 import torch
+import sys
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 import multiprocessing as mp
 from src.utils import load_hparams, load_agent_and_env, set_run_id, get_logger
 from src.agents.ppo import PPO
