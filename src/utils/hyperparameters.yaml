@@ -1,7 +1,7 @@
 #env params
 env_name:
   - ant
-max_episodic_timesteps: 2000
+max_episodic_timesteps: 200
 population_size: 8
 enable_features: True
 
@@ -18,6 +18,7 @@ method:
   - method1
 #  - method2
 #  - method5
+#  - NerveNet
 propagation_steps:
   - 3
 #  - 4
@@ -29,8 +30,8 @@ hidden_node_dim:
 #  - 128
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
-#  - 64
-  - 128
+  - 64
+#  - 128
 #  - 256
 morphology_fc_ratio:
   - 0
@@ -42,7 +43,7 @@ morphology_fc_ratio:
   - 1
 
 #misc params
-seed: 1
+seed: 5
 
 #boring params
 save_model_freq: 10
