@@ -10,9 +10,29 @@ from src.agents.ppo import PPO
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
+# def run_with_gpu(args):
+#     hparam, gpu_id = args
+#     device = torch.device(f'cuda:{gpu_id}')
+#     return run(hparam, device)
+#
+#
+# def run(hparam, device):
+#     set_run_id(hparam['run_id'])
+#     logger = get_logger()
+#     logger.info(f"Starting run with parameters: {hparam['run_id']} on {device}")
+#     actor, env = load_agent_and_env(hparam, device)
+#     model = PPO(actor=actor, device=device, env=env, **hparam)
+#     model.learn()
+
+
 def run_with_gpu(args):
     hparam, gpu_id = args
-    device = torch.device(f'cuda:{gpu_id}')
+    # Force this process to only see one GPU
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    device = torch.device('cuda:0')
+    print(f"Process assigned GPU {gpu_id}, using device {device}")
+    print(f"Available GPUs in this process: {torch.cuda.device_count()}")
+    print(f"Current GPU: {torch.cuda.current_device()}")
     return run(hparam, device)
 
 
@@ -20,7 +40,16 @@ def run(hparam, device):
     set_run_id(hparam['run_id'])
     logger = get_logger()
     logger.info(f"Starting run with parameters: {hparam['run_id']} on {device}")
+    logger.info(f"Current GPU in run(): {torch.cuda.current_device()}")
+
     actor, env = load_agent_and_env(hparam, device)
+
+    # Debug: Check if actor is actually on the right device
+    for name, param in actor.named_parameters():
+        if param.device != device:
+            logger.warning(f"Parameter {name} is on {param.device}, expected {device}")
+        break  # Just check the first parameter
+
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.learn()
 
