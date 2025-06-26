@@ -155,8 +155,6 @@ class PPO:
         mean_action = self.actor(graph)
         dist = MultivariateNormal(mean_action, self.cov_mat)
         action = dist.sample()
-        action = torch.clamp(action, torch.tensor(self.env.action_space.low, device=self.device),  # clip action
-                             torch.tensor(self.env.action_space.high, device=self.device))
         log_prob = dist.log_prob(action)
         action_cpu = action.cpu()
         if calculate_log_probs:
