@@ -20,7 +20,7 @@ def run(hparam, device):
     set_run_id(hparam['run_id'])
     logger = get_logger()
     logger.info(f"Starting run with parameters: {hparam['run_id']} on {device}")
-    actor, env = load_agent_and_env(hparam)
+    actor, env = load_agent_and_env(hparam, device)
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.learn()
 
