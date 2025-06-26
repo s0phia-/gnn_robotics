@@ -15,10 +15,10 @@ total_timesteps: 2000000
 
 # GNN params
 method:
-#  - method1
+  - method1
 #  - method2
 #  - method5
-  - NerveNet
+#  - NerveNet
 propagation_steps:
   - 3
 #  - 4
@@ -34,13 +34,13 @@ decoder_and_message_hidden_dim:
 #  - 128
 #  - 256
 morphology_fc_ratio:
-#  - 0
-#  - .2
-#  - .4
-  - .5
-#  - .6
-#  - .8
-#  - 1
+  - 0
+  - .2
+  - .4
+#  - .5
+  - .6
+  - .8
+  - 1
 
 #misc params
 seed: 5
