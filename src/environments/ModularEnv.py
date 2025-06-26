@@ -44,7 +44,12 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = (posafter - posbefore) / self.dt
         reward += alive_bonus
         reward -= 1e-3 * np.square(a).sum()
-        done = False
+        state = self.state_vector()
+        notdone = np.isfinite(state).all() \
+            and state[2] >= 0.2 and state[2] <= 1.0
+        done = not notdone
+        
+        # done = False
         ob = self._get_obs()
         return ob, reward, done, False, {}
 
