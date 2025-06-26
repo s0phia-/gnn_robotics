@@ -161,25 +161,28 @@ class MessagePassingGNN(nn.Module):
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
         batch = data.batch
+
         x = self.encoder(x=x)
+
         for i in range(self.propagation_steps):
             x = self.middle[i](x=x, edge_index=edge_index)
+
+        x = self.decoder(x=x)
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        x = self.decoder(x=x)
         x = x.view(-1, self.num_nodes)
         x = x.squeeze(0)
 
-        if batch is not None:  # deals with when batch of graphs
+        if batch is not None:
             num_graphs = batch.max().item() + 1
             mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
             x = x.view(-1)[mask]
             x = x.view(num_graphs, x.shape[0] // num_graphs)
             return x
 
-        else:  # Single graph case
+        else:
             x = x[self.mask]
             return x
 
