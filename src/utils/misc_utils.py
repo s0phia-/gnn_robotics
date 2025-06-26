@@ -50,8 +50,7 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
     return all_combinations
 
 
-def load_agent_and_env(hparam):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def load_agent_and_env(hparam, device):
     method = hparam['method']
     if method == "method1":
         agent = Method1Gnn
@@ -82,4 +81,4 @@ def load_agent_and_env(hparam):
                   device=device,
                   max_neighbours=max_in,
                   **hparam)
-    return actor, env, device
+    return actor, env

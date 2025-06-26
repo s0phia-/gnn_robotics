@@ -10,11 +10,17 @@ from src.agents.ppo import PPO
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
-def run(hparam):
+def run_with_gpu(args):
+    hparam, gpu_id = args
+    device = torch.device(f'cuda:{gpu_id}')
+    return run(hparam, device)
+
+
+def run(hparam, device):
     set_run_id(hparam['run_id'])
     logger = get_logger()
-    logger.info(f"Starting run with parameters: {hparam['run_id']}")
-    actor, env, device = load_agent_and_env(hparam)
+    logger.info(f"Starting run with parameters: {hparam['run_id']} on {device}")
+    actor, env = load_agent_and_env(hparam)
     model = PPO(actor=actor, device=device, env=env, **hparam)
     model.learn()
 
@@ -24,8 +30,13 @@ if __name__ == '__main__':
     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
     if torch.cuda.is_available():
         mp.set_start_method('spawn', force=True)
-        pool = mp.Pool(processes=min(4, len(hparams)))
-        results = pool.map(run, hparams)
+        num_gpus = torch.cuda.device_count()
+
+        # Assign each experiment to a GPU
+        gpu_assignments = [(hparam, i % num_gpus) for i, hparam in enumerate(hparams)]
+
+        pool = mp.Pool(processes=min(num_gpus, len(hparams)))
+        results = pool.map(run_with_gpu, gpu_assignments)
         pool.close()
         pool.join()
     else:
