@@ -154,10 +154,10 @@ class PPO:
         graph = make_graph(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
         mean_action = self.actor(graph)
         dist = MultivariateNormal(mean_action, self.cov_mat)
-        # sample action, find log prob of action
         action = dist.sample()
+        action = torch.clamp(action, torch.tensor(self.env.action_space.low, device=self.device),  # clip action
+                             torch.tensor(self.env.action_space.high, device=self.device))
         log_prob = dist.log_prob(action)
-
         action_cpu = action.cpu()
         if calculate_log_probs:
             return action_cpu.detach().numpy(), log_prob

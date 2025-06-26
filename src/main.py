@@ -2,74 +2,58 @@ import os
 import multiprocessing as mp
 import sys
 
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 # Set this before any torch imports
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+from src.utils import load_hparams, load_agent_and_env, set_run_id, get_logger, plot_rewards_with_seeds
+from src.agents.ppo import PPO
+
+
+def run(hparam, device):
+    set_run_id(hparam['run_id'])
+    logger = get_logger()
+    logger.info(f"Starting run with parameters: {hparam['run_id']} on {device}")
+    logger.info(f"Current GPU in run(): {torch.cuda.current_device()}")
+
+    actor, env = load_agent_and_env(hparam, device)
+
+    for name, param in actor.named_parameters():
+        if param.device != device:
+            logger.warning(f"Parameter {name} is on {param.device}, expected {device}")
+        break
+
+    model = PPO(actor=actor, device=device, env=env, **hparam)
+    model.learn()
 
 
 def run_with_gpu(args):
     hparam, gpu_id = args
-
-    # Import torch AFTER setting CUDA_VISIBLE_DEVICES
     os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
-
     import torch
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.insert(0, project_root)
-    from src.utils import load_hparams, load_agent_and_env, set_run_id, get_logger
-    from src.agents.ppo import PPO
-
-    def run(hparam, device):
-        set_run_id(hparam['run_id'])
-        logger = get_logger()
-        logger.info(f"Starting run with parameters: {hparam['run_id']} on {device}")
-        logger.info(f"Current GPU in run(): {torch.cuda.current_device()}")
-
-        actor, env = load_agent_and_env(hparam, device)
-
-        # Debug: Check if actor is actually on the right device
-        for name, param in actor.named_parameters():
-            if param.device != device:
-                logger.warning(f"Parameter {name} is on {param.device}, expected {device}")
-            break  # Just check the first parameter
-
-        model = PPO(actor=actor, device=device, env=env, **hparam)
-        model.learn()
-
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Process GPU {gpu_id}: Available GPUs = {torch.cuda.device_count()}")
-
     return run(hparam, device)
 
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    # Import torch here to load hparams
     import torch
-
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.insert(0, project_root)
-    from src.utils import load_hparams, plot_rewards_with_seeds
-
     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
-
     if torch.cuda.is_available():
         mp.set_start_method('spawn', force=True)
         num_gpus = torch.cuda.device_count()
-        print(f"Using {num_gpus} GPUs")
-
-        # Assign each experiment to a GPU
         gpu_assignments = [(hparam, i % num_gpus) for i, hparam in enumerate(hparams)]
-
         pool = mp.Pool(processes=min(num_gpus, len(hparams)))
         results = pool.map(run_with_gpu, gpu_assignments)
         pool.close()
         pool.join()
     else:
-        # For CPU fallback, need to import things here too
         from src.utils import load_agent_and_env, set_run_id, get_logger
         from src.agents.ppo import PPO
-        # ... define run function here for CPU case
-
+        run(hparams[0])
     plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
 
 
@@ -88,7 +72,7 @@ if __name__ == '__main__':
 #     model.learn()
 #
 #
-# if __name__ == '__main__':
+if __name__ == '__main__':
 #     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 #     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
 #     if torch.cuda.is_available():
@@ -105,4 +89,4 @@ if __name__ == '__main__':
 #     else:
 #         run(hparams[0])
 #     plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
-#     # plot_rewards_with_seeds(f'../runs/change ppo, ftn_approx/results')
+    plot_rewards_with_seeds(f'../runs/ac/results')
