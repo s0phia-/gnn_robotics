@@ -76,15 +76,15 @@ def average_results(results_dict):
     return averaged_results
 
 
-def plot_averaged_data(avg_data, save_path=None, smoothed=False):
+def plot_averaged_data(avg_data, save_path=None, smoothed=False, window_size=None):
     plt.figure(figsize=(12, 8))
     param_names = sorted(avg_data.keys())
     for param_name in param_names:
         mean_rewards = avg_data[param_name]
         iterations = range(len(mean_rewards))
         if smoothed:
-            smoothed_rewards = np.convolve(mean_rewards, np.ones(5)/5, mode='valid')
-            smoothed_iterations = iterations[2:-2]
+            smoothed_rewards = np.convolve(mean_rewards, np.ones(window_size) / window_size, mode='valid')
+            smoothed_iterations = range(window_size - 1, len(mean_rewards))
             plt.plot(smoothed_iterations, smoothed_rewards, label=param_name, linewidth=2)
         else:
             plt.plot(iterations, mean_rewards, label=param_name, linewidth=2)
@@ -130,6 +130,6 @@ def plot_rewards_with_seeds(results_folder):
     save_path=results_folder
     grouped_data = process_folder(results_folder)
     plt_data = average_results(grouped_data)
-    plt_data = filter_top_n_by_method(plt_data)
-    plot_averaged_data(plt_data, save_path)
+    # plt_data = filter_top_n_by_method(plt_data)
+    plot_averaged_data(plt_data, save_path, smoothed=True, window_size=10)
     return plt_data
