@@ -199,8 +199,8 @@ class PPO:
         return log_probs
 
     def demo(self, actor_path, critic_path):
-        self.actor.load_state_dict(torch.load(actor_path))
-        self.critic.load_state_dict(torch.load(critic_path))
+        self.load_actor(actor_path, self.device)
+        self.load_critic(critic_path, self.device)
         self.actor.eval()
         self.critic.eval()
         env = self.env
@@ -211,3 +211,9 @@ class PPO:
             obs, reward, terminated, truncated, _ = env.step(action)
             env.render()
             sleep(.1)
+
+    def load_actor(self, actor_path, device):
+        self.actor.load_state_dict(torch.load(actor_path, map_location=device))
+
+    def load_critic(self, critic_path, device):
+        self.critic.load_state_dict(torch.load(critic_path, map_location=device))
