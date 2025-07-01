@@ -37,7 +37,7 @@ morphology_fc_ratio:
   - 0
   - .2
   - .4
-#  - .5
+  - .5
   - .6
   - .8
   - 1
@@ -53,3 +53,4 @@ xml_path: 'environments/assets'
 env_dir: './environments'
 base_modular_env_path: './environments/ModularEnv.py'
 data_dir: './results'
+load_run_path: null

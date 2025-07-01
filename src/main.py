@@ -52,21 +52,21 @@ if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=3)
 
-    # if torch.cuda.is_available():  # GPU
-    #     mp.set_start_method('spawn', force=True)
-    #     num_gpus = torch.cuda.device_count()
-    #     print(f"Using {num_gpus} GPUs")
-    #     gpu_assignments = [(hparam, i % num_gpus) for i, hparam in enumerate(hparams)]
-    #     pool = mp.Pool(processes=min(num_gpus, len(hparams)))
-    #     results = pool.map(run_worker, gpu_assignments)
-    #     pool.close()
-    #     pool.join()
-    # else:  # CPU
-    print("CUDA not available, running on CPU")
-    mp.set_start_method('spawn', force=True)
-    pool = mp.Pool(processes=min(mp.cpu_count(), len(hparams)))
-    results = pool.map(run_worker, hparams)
-    pool.close()
-    pool.join()
+    if torch.cuda.is_available():  # GPU
+        mp.set_start_method('spawn', force=True)
+        num_gpus = torch.cuda.device_count()
+        print(f"Using {num_gpus} GPUs")
+        gpu_assignments = [(hparam, i % num_gpus) for i, hparam in enumerate(hparams)]
+        pool = mp.Pool(processes=min(num_gpus, len(hparams)))
+        results = pool.map(run_worker, gpu_assignments)
+        pool.close()
+        pool.join()
+    else:  # CPU
+        print("CUDA not available, running on CPU")
+        mp.set_start_method('spawn', force=True)
+        pool = mp.Pool(processes=min(3, len(hparams)))
+        results = pool.map(run_worker, hparams)
+        pool.close()
+        pool.join()
     plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
-    plot_rewards_with_seeds('../runs/reg_plot/results')
+    # plot_rewards_with_seeds('../runs/reg_plot/results')
