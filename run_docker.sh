@@ -13,7 +13,7 @@ else
     DOCKER_CMD="docker"
 fi
 
-$DOCKER_CMD run --name isaac-lab --gpus all -e "ACCEPT_EULA=Y" --rm --network=host \
+$DOCKER_CMD run --name isaac-lab -e "ACCEPT_EULA=Y" --rm --network=host \
    -e "PRIVACY_CONSENT=Y" \
    -v "${SOURCE_DIR}:/workspace/isaaclab/custom_scripts:rw" \
    -v "${OUTPUT_DIR}:/workspace/isaaclab/logs:rw" \
