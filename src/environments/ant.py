@@ -35,7 +35,6 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self._get_obs().shape), dtype=float)
 
-
     def step(self, a):
         posbefore = self.data.qpos[0]
         self.do_simulation(a, self.frame_skip)
@@ -44,6 +43,9 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = (posafter - posbefore) / self.dt
         reward += alive_bonus
         reward -= 1e-3 * np.square(a).sum()
+        # state = self.state_vector()
+        # notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0
+        # done = not notdone
         done = False
         ob = self._get_obs()
         return ob, reward, done, False, {}

@@ -2,23 +2,35 @@
 env_name:
   - ant
 max_episodic_timesteps: 2000
-population_size: 8
+num_threads: 5 #
 enable_features: True
 
 #PPO params
 lr: 3e-4
-gamma: 0.95
-clip_value: 0.1
+gamma: 0.99
+clip_value: 0.2
 n_updates_per_iter: 10
-timesteps_per_batch: 2048
-total_timesteps: 2000000
+timesteps_per_batch: 2050
+total_timesteps: 1e6
+advantage_method: gae #
+gae_lam: .95 #
+value_lr: 3e-4 #
+grad_clip_value: 5 #
+optim_batch_size: 64 #
+use_KL_penalty: False
+target_kl: 0.01 #
+target_kl_high: 2 #
+target_kl_low: 0.5 #
+use_weight_decay: False #
+weight_decay_coeff: 1e-5 #
 
 # GNN params
+gnn_init_method: orthogonal
 method:
-  - method1
+#  - method1
 #  - method2
 #  - method5
-#  - NerveNet
+  - NerveNet
 propagation_steps:
   - 3
 #  - 4
@@ -34,13 +46,13 @@ decoder_and_message_hidden_dim:
 #  - 128
 #  - 256
 morphology_fc_ratio:
-  - 0
-  - .2
-  - .4
-  - .5
-  - .6
-  - .8
-  - 1
+#  - 0
+#  - .2
+#  - .4
+#  - .5
+#  - .6
+#  - .8
+#  - 1
 
 #misc params
 seed: 5
