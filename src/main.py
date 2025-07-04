@@ -65,6 +65,5 @@ if __name__ == '__main__':
         results = pool.map(run_worker, hparams)
         pool.close()
         pool.join()
-
     plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
     
