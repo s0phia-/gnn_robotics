@@ -155,10 +155,8 @@ class PPO:
         graph = make_graph(obs, self.graph_info['num_nodes'],edge_index=self.graph_info['edge_idx'])
         mean_action = self.actor(graph)
         dist = MultivariateNormal(mean_action, self.cov_mat)
-        # sample action, find log prob of action
         action = dist.sample()
         log_prob = dist.log_prob(action)
-
         action_cpu = action.cpu()
         if calculate_log_probs:
             return action_cpu.detach().numpy(), log_prob
@@ -202,8 +200,8 @@ class PPO:
         return log_probs
 
     def demo(self, actor_path, critic_path):
-        self.actor.load_state_dict(torch.load(actor_path))
-        self.critic.load_state_dict(torch.load(critic_path))
+        self.load_actor(actor_path, self.device)
+        self.load_critic(critic_path, self.device)
         self.actor.eval()
         self.critic.eval()
         env = self.env
@@ -214,3 +212,9 @@ class PPO:
             obs, reward, terminated, truncated, _ = env.step(action)
             env.render()
             sleep(.1)
+
+    def load_actor(self, actor_path, device):
+        self.actor.load_state_dict(torch.load(actor_path, map_location=device))
+
+    def load_critic(self, critic_path, device):
+        self.critic.load_state_dict(torch.load(critic_path, map_location=device))

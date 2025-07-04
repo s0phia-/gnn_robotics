@@ -3,6 +3,7 @@ import os
 import datetime
 import yaml
 import itertools
+from torch_geometric.utils import degree
 import torch
 from copy import deepcopy
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
@@ -14,17 +15,20 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
     :param yaml_hparam_path: path to YAML hyperparameters
     :param num_seeds: number of different seeds to use
     """
-    run_dir = f"../runs/run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    os.makedirs(run_dir, exist_ok=True)
-    os.makedirs(f"{run_dir}/logs", exist_ok=True)
-    os.makedirs(f"{run_dir}/checkpoints", exist_ok=True)
-    os.makedirs(f"{run_dir}/results", exist_ok=True)
-
-    yaml_filename = os.path.basename(yaml_hparam_path)
-    shutil.copy2(yaml_hparam_path, os.path.join(run_dir, yaml_filename))
-
     with open(yaml_hparam_path, 'r') as f:
         hparam = yaml.safe_load(f)
+    run_dir = f"../runs/run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    os.makedirs(run_dir, exist_ok=True)
+    os.makedirs(f"{run_dir}/checkpoints", exist_ok=True)
+    yaml_filename = os.path.basename(yaml_hparam_path)
+    shutil.copy2(yaml_hparam_path, os.path.join(run_dir, yaml_filename))
+    if hparam['load_run_path'] is None:
+        os.makedirs(f"{run_dir}/logs", exist_ok=True)
+        os.makedirs(f"{run_dir}/results", exist_ok=True)
+    else:
+        load_dir = f'../runs/{hparam["load_run_path"]}'
+        shutil.copytree(f'{load_dir}/logs', f"{run_dir}/logs")
+        shutil.copytree(f'{load_dir}/results', f"{run_dir}/results")
 
     base_seed = hparam.get('seed', 0)
     seeds = [base_seed + i * 100 for i in range(num_seeds)]
@@ -66,8 +70,6 @@ def load_agent_and_env(hparam, device):
     env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
     print(f"{env=}, {node_dim=}, {num_nodes=}")
     edges = create_edges(env, device)
-
-    from torch_geometric.utils import degree
     in_degree = degree(edges[1], num_nodes=num_nodes)
     max_in = in_degree.max().item()
     actuator_mask = check_actuators(env)

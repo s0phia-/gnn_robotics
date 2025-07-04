@@ -67,3 +67,4 @@ if __name__ == '__main__':
         pool.join()
 
     plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
+    
