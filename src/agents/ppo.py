@@ -52,6 +52,7 @@ class PPO:
         PPO learning step. Nice description and pseudocode: https://spinningup.openai.com/en/latest/algorithms/ppo.html
         """
         iters = int(0)
+        total_iters = int(self.total_timesteps / self.timesteps_per_batch)
         t = 0
         rewards_history = []
         while t < int(self.total_timesteps):
@@ -94,7 +95,7 @@ class PPO:
                 critic_loss.backward()
                 self.critic_optim.step()
 
-            self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
+            self.logger.info("Iteration {}/{} loss {}.".format(iters, total_iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
                 # track rewards
                 np.savetxt(f"{self.results_dir}/{self.run_id}.csv", rewards_history,

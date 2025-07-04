@@ -19,7 +19,6 @@ def run_worker(args):
     import torch
     from src.utils import load_agent_and_env, set_run_id, get_logger
     from src.agents.ppo import PPO
-
     def run(hparam, device):
         set_run_id(hparam['run_id'])
         logger = get_logger()
@@ -32,10 +31,6 @@ def run_worker(args):
                 logger.warning(f"Parameter {name} is on {param.device}, expected {device}")
             break
         model = PPO(actor=actor, device=device, env=env, **hparam)
-        if hparam['load_run_path'] is not None:
-            checkpoint_path = f'../runs/{hparam["load_run_path"]}/checkpoints/{hparam["run_id"]}'
-            model.load_actor(f'{checkpoint_path}/ppo_actor.pth', device)
-            model.load_critic(f'{checkpoint_path}/ppo_critic.pth', device)
         model.learn()
     if torch.cuda.is_available() and gpu_id is not None:
         device = torch.device('cuda:0')
@@ -43,14 +38,16 @@ def run_worker(args):
     else:
         device = torch.device('cpu')
         print(f"Process running on CPU")
+
     return run(hparam, device)
 
 
 if __name__ == '__main__':
     import torch
     from src.utils import load_hparams, plot_rewards_with_seeds
+
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=3)
+    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
 
     if torch.cuda.is_available():  # GPU
         mp.set_start_method('spawn', force=True)
@@ -64,9 +61,9 @@ if __name__ == '__main__':
     else:  # CPU
         print("CUDA not available, running on CPU")
         mp.set_start_method('spawn', force=True)
-        pool = mp.Pool(processes=min(3, len(hparams)))
+        pool = mp.Pool(processes=min(4, len(hparams)))  # Use 4 CPU cores
         results = pool.map(run_worker, hparams)
         pool.close()
         pool.join()
     plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
-    # plot_rewards_with_seeds('../runs/reg_plot/results')
+    
