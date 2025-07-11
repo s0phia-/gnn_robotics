@@ -1,4 +1,4 @@
-from src.agents.function_approximators import MessagePassingGNN, Gnnlayer
+from src.agents.nerve_net import MessagePassingGNN, Gnnlayer
 import torch
 import torch.nn as nn
 from torch_geometric.utils import add_self_loops

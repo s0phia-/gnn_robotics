@@ -1,4 +1,4 @@
-from src.agents.function_approximators import Gnnlayer
+from src.agents.nerve_net import Gnnlayer
 from src.agents.method2 import *
 from torch_geometric.utils import scatter
 

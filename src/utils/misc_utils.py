@@ -4,7 +4,6 @@ import datetime
 import yaml
 import itertools
 from torch_geometric.utils import degree
-import torch
 from copy import deepcopy
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
 from src.agents import *
@@ -54,7 +53,20 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
     return all_combinations
 
 
+def load_env(hparam, device):
+    env_setup = MujocoParser(**hparam)
+    env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
+    print(f"{env=}, {node_dim=}, {num_nodes=}")
+    edges = create_edges(env, device)
+    actuator_mask = check_actuators(env)
+    env.reset()
+    hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim,
+                            'actuator_mask': actuator_mask}
+    return env
+
+
 def load_agent_and_env(hparam, device):
+    env = load_env(hparam, device)
     method = hparam['method']
     if method == "method1":
         agent = Method1Gnn
@@ -66,21 +78,42 @@ def load_agent_and_env(hparam, device):
         agent = NerveNet
     else:
         raise ValueError(f"Method {method} not implemented")
-    env_setup = MujocoParser(**hparam)
-    env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
-    print(f"{env=}, {node_dim=}, {num_nodes=}")
-    edges = create_edges(env, device)
-    in_degree = degree(edges[1], num_nodes=num_nodes)
+    graph_info = hparam['graph_info']
+    edges = graph_info['edge_idx']
+    in_degree = degree(edges[1], num_nodes=graph_info['num_nodes'])
     max_in = in_degree.max().item()
-    actuator_mask = check_actuators(env)
-    env.reset()
-    hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
-    actor = agent(in_dim=node_dim,
-                  num_nodes=num_nodes,
+    actor = agent(in_dim=graph_info['num_nodes'],
+                  num_nodes=graph_info['num_nodes'],
                   edge_index=edges,
                   action_dim=1,
-                  mask=actuator_mask,
+                  mask=graph_info['actuator_mask'],
                   device=device,
                   max_neighbours=max_in,
                   **hparam)
     return actor, env
+
+
+def load_skrl_agent_and_env(hparam, device):
+    env = load_env(hparam, device)
+    if not hasattr(env, 'num_agents'):
+        env.num_agents = 1
+    if not hasattr(env, 'num_envs'):
+        env.num_envs = 1
+    graph_info = hparam['graph_info']
+    models = {"policy": SKRLMessagePassingGNN(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        device=device,
+        in_dim=graph_info['node_dim'],
+        num_nodes=graph_info['num_nodes'],
+        mask=graph_info['actuator_mask'],
+        edge_index=graph_info['edge_idx'],
+        **hparam
+    ), "value": SKRLFeedForward(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        device=device,
+        hidden_dim=hparam.get('decoder_and_message_hidden_dim', 64),
+        hidden_layers=hparam.get('decoder_and_message_layers', 3)
+    )}
+    return models, env

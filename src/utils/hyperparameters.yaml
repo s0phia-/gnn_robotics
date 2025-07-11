@@ -10,7 +10,7 @@ lr: 3e-4
 gamma: 0.99
 clip_value: 0.2
 n_updates_per_iter: 10
-timesteps_per_batch: 2050
+timesteps_per_batch: 2048
 total_timesteps: 1e6
 advantage_method: gae #
 gae_lam: .95 #

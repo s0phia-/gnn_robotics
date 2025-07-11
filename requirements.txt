@@ -6,3 +6,5 @@ PyYAML==6.0.2
 stable_baselines3==2.6.0
 torch==2.6.0
 xmltodict==0.14.2
+
+skrl~=1.4.3

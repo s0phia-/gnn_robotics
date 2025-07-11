@@ -1,4 +1,4 @@
-from src.agents.function_approximators import *
+from src.agents.nerve_net import *
 from torch_geometric.utils import dense_to_sparse
 
 from GNN_Layers.GAT import GAT

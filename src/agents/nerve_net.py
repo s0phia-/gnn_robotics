@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
 from torch_geometric.data import Data, Batch
+from skrl.models.torch import Model, GaussianMixin
 
 
 class Encoder(nn.Module):
@@ -133,7 +134,7 @@ class MessagePassingGNN(nn.Module):
         :param in_dim: dimensions of input to network
         :param out_dim: dimensions of output of network
         """
-        super().__init__()
+        nn.Module.__init__(self)
         self.__dict__.update((k, v) for k, v in kwargs.items())
         self.num_nodes = num_nodes
         self.mask = torch.tensor(mask, dtype=torch.bool)
@@ -159,8 +160,40 @@ class MessagePassingGNN(nn.Module):
                                device=device).to(device)
 
     def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        batch = data.batch
+        if isinstance(data, torch.Tensor) or isinstance(data, np.ndarray):
+            if isinstance(data, np.ndarray):
+                data = torch.tensor(data, dtype=torch.float, device=self.device)
+                print(f"DEBUG: states shape: {data.shape}")
+                print(f"DEBUG: states type: {type(data)}")
+
+            if data.dim() == 1:  # single observation
+                obs_part = data[:135]
+                print(f"DEBUG: obs_part shape: {obs_part.shape}")
+                print(f"DEBUG: obs_part elements: {obs_part.numel()}")
+                edge_part = data[135:]  # todo
+                edge_index = edge_part.view(2, 16).long()
+                x = obs_part.view(self.num_nodes, -1)
+                batch = None
+            else:  # Batch of observations
+                batch_size = data.shape[0]
+                print(f"DEBUG: batch_size: {batch_size}")
+                print(f"DEBUG: self.num_nodes: {self.num_nodes}")
+                obs_part = data[:, :135]   # todo
+                print(f"DEBUG: obs_part shape: {obs_part.shape}")
+                print(f"DEBUG: obs_part elements: {obs_part.numel()}")
+                edge_part = data[:, 135:]
+                edge_indices = edge_part.view(batch_size, 2, 16).long()
+                x = obs_part.view(batch_size * self.num_nodes, -1)
+                batch = torch.arange(batch_size, device=self.device).repeat_interleave(self.num_nodes)
+
+                edge_index_batch = []
+                for i in range(batch_size):
+                    offset = i * self.num_nodes
+                    edge_index_batch.append(edge_indices[i] + offset)
+                edge_index = torch.cat(edge_index_batch, dim=1)
+        else:
+            x, edge_index = data.x, data.edge_index
+            batch = data.batch
 
         x = self.encoder(x=x)
 
@@ -176,15 +209,47 @@ class MessagePassingGNN(nn.Module):
         x = x.squeeze(0)
 
         if batch is not None:
-            num_graphs = batch.max().item() + 1
-            mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
-            x = x.view(-1)[mask]
-            x = x.view(num_graphs, x.shape[0] // num_graphs)
+            batch_size = batch.max().item() + 1
+            x = x.view(batch_size, self.num_nodes)
+            x = x[:, self.mask]
             return x
 
         else:
             x = x[self.mask]
             return x
+
+
+# CHANGE: New SKRL-compatible class that inherits from your original
+class SKRLMessagePassingGNN(MessagePassingGNN, Model, GaussianMixin):
+    def __init__(self, observation_space, action_space, device, **kwargs):
+        Model.__init__(self, observation_space=observation_space, action_space=action_space, device=device)
+        GaussianMixin.__init__(self, clip_actions=True)
+
+        MessagePassingGNN.__init__(
+            self,
+            in_dim=kwargs['in_dim'],
+            num_nodes=kwargs['num_nodes'],
+            action_dim=1,
+            mask=kwargs['mask'],
+            device=device,
+            **{k: v for k, v in kwargs.items() if k not in ['in_dim', 'num_nodes', 'mask']}
+        )
+
+        self.log_std_parameter = nn.Parameter(torch.zeros(action_space.shape[0], device=device))
+
+    def compute(self, inputs, role=""):
+        states = inputs["states"]
+        mean = self.forward(states)
+        log_std = self.log_std_parameter.expand_as(mean)
+        return mean, log_std, {}
+
+    def act(self, inputs, role=""):
+        mean, log_std, outputs = self.compute(inputs, role)
+        std = log_std.exp()
+        distribution = torch.distributions.Normal(mean, std)
+        actions = distribution.sample()
+        log_prob = distribution.log_prob(actions).sum(dim=-1, keepdim=True)
+        return actions, log_prob, outputs
 
 
 def make_graph(obs, num_nodes, edge_index):
@@ -214,27 +279,14 @@ def graph_to_action(graph):
     return x
 
 
-class FeedForward(nn.Module):
-    def __init__(self,
-                 in_dim: int,
-                 out_dim: int,
-                 device: torch.device,
-                 hidden_dim: int = 64,
-                 hidden_layers: int = 3):
-        """
-        Feed forward Neural Network
-        :param in_dim: dimensions of input to network
-        :param out_dim: dimensions of output of network
-        """
-        super().__init__()
-        self.layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.ReLU()]
-        for _ in range(hidden_layers - 1):
-            self.layers.append(nn.Linear(hidden_dim, hidden_dim, device=device))
-            self.layers.append(nn.ReLU())
-        self.layers.append(nn.Linear(hidden_dim, out_dim, device=device))
-        self.layers = nn.Sequential(*self.layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if isinstance(x, np.ndarray):
-            x = torch.tensor(x, dtype=torch.float)
-        return self.layers(x)
+def states_to_graph(states, num_nodes, edge_index):
+    """
+    Convert SKRL states tensor to PyTorch Geometric Data format
+    You need to implement this based on how your observations are structured
+    """
+    if states.dim() == 1:
+        # Single observation
+        return make_graph(states, num_nodes, edge_index)
+    else:
+        # Batch of observations
+        return make_graph_batch(states, num_nodes, edge_index)

@@ -32,9 +32,8 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.reset(seed=seed)
         else:
             self.reset()
-
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self._get_obs().shape), dtype=float)
-
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(135+32, ), dtype=np.float32)
+        self.limb_obs_size = 15
 
     def step(self, a):
         posbefore = self.data.qpos[0]
@@ -44,15 +43,24 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = (posafter - posbefore) / self.dt
         reward += alive_bonus
         reward -= 1e-3 * np.square(a).sum()
-        done = False
+        state = self.state_vector()
+        notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0
+        terminated = [bool(not notdone)]
+        truncated = [False]
+        # done = False
         ob = self._get_obs()
-        return ob, reward, done, False, {}
+        if hasattr(reward, 'item'):
+            reward = float(reward.item())
+        else:
+            reward = float(reward)
+        return ob, reward, terminated, truncated, {}
 
     def _get_obs(self):
         """
         this function loops through numbers 1...num_joints, gets features, and concatenates them together in that order.
         I assume that means the
         """
+
         def _get_obs_per_limb(body_id):
             # Get the torso position
             torso_id = self.data.body("torso").id
@@ -92,7 +100,7 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Skip body 0 (world) and collect observations for all other bodies
         full_obs = np.concatenate([_get_obs_per_limb(i) for i in range(1, self.model.nbody)])
-        return full_obs.ravel()
+        return full_obs.ravel().astype(np.float32)
 
     def reset_model(self):
         self.set_state(
