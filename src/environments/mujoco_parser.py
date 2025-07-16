@@ -277,8 +277,7 @@ class ModularEnvWrapper(gym.Wrapper):
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        edge_flat = self.edge_index.flatten().cpu().numpy()
-        obs = torch.tensor(np.concatenate([obs, edge_flat, [self.env.unwrapped.idx]]), dtype=torch.float32)
+        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
         terminated = torch.tensor(terminated, dtype=torch.bool)
         truncated = torch.tensor(truncated, dtype=torch.bool)
         reward = torch.tensor(reward, dtype=torch.float32)
@@ -296,8 +295,7 @@ class ModularEnvWrapper(gym.Wrapper):
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        edge_flat = self.edge_index.flatten().cpu().numpy()
-        obs = torch.tensor(np.concatenate([obs, edge_flat, [self.env.unwrapped.idx]]), dtype=torch.float32)
+        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
         return obs, info
 
 

@@ -33,8 +33,8 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.reset(seed=seed)
         else:
             self.reset()
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(135+32, ), dtype=np.float32)
-        self.limb_obs_size = 15
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(135+32, ), dtype=np.float32)  # todo
+        self.limb_obs_size = 15  # todo
 
     def step(self, a):
         posbefore = self.data.qpos[0]
