@@ -36,7 +36,7 @@ class SKRLFeedForward(DeterministicMixin, Model):
         DeterministicMixin.__init__(self)
         Model.__init__(self, observation_space, action_space, device)
         self.network = FeedForward(
-            in_dim=135,
+            in_dim=observation_space.shape[0] - 1,
             out_dim=1,
             device=device,
             **kwargs
@@ -44,6 +44,9 @@ class SKRLFeedForward(DeterministicMixin, Model):
 
     def compute(self, inputs, role=""):
         states = inputs["states"]
-        states = states[:135]
+        if states.dim() == 1:
+            states = states[:-1]
+        else:
+            states = states[:, :-1]
         value = self.network(states)
         return value, {}

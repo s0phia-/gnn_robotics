@@ -25,7 +25,6 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # get from _get_obs
         mujoco_env.MujocoEnv.__init__(self, model_path=xml,
                                       frame_skip=4,
-                                      # observation_space=Box(low=-np.inf, high=np.inf, shape=(135,), dtype=float),
                                       observation_space=None,
                                       render_mode=None, )
         utils.EzPickle.__init__(self)
@@ -33,8 +32,10 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.reset(seed=seed)
         else:
             self.reset()
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(135+32, ), dtype=np.float32)  # todo
-        self.limb_obs_size = 15  # todo
+        self.num_limbs = self.model.nbody - 1
+        self.limb_obs_size = len(self._get_obs()) // self.num_limbs
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self.num_limbs * self.limb_obs_size + 1,),
+                                     dtype=np.float32)
 
     def step(self, a):
         posbefore = self.data.qpos[0]
@@ -46,8 +47,8 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         reward -= 1e-3 * np.square(a).sum()
         state = self.state_vector()
         notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0
-        terminated = [bool(not notdone)]
-        truncated = [False]
+        terminated = bool(not notdone)
+        truncated = False
         # done = False
         ob = self._get_obs()
         if hasattr(reward, 'item'):

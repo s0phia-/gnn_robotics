@@ -67,23 +67,6 @@ class Gnnlayer(MessagePassing):
         return self.propagate(edge_index, x=x)
 
     def message(self, x_i, x_j):
-        """
-        Message passing involves aggregating information from neighboring nodes.
-        For a given edge (i, j), where i is the target node and j is the source node:
-
-        - x_i: Features of the target node i.
-        - x_j: Features of the source node j.
-
-        The message function computes a message m_ij as:
-
-        m_ij = f_message([x_i || x_j])
-
-        where:
-        - [x_i || x_j] denotes the concatenation of x_i and x_j.
-        - f_message is a neural network (here, self.message_function).
-
-        These messages are then aggregated by mean for all neighbors of node i.
-        """
         msg = torch.cat([x_i, x_j], dim=-1)
         return self.message_function(msg)
 
@@ -170,12 +153,10 @@ class MessagePassingGNN(nn.Module):
 
         x = obs.view(num_nodes, -1)
         mask = torch.tensor(actuator_mask, dtype=torch.bool)
-        print(edge_idx.shape)
         return Data(x=x, edge_index=edge_idx), mask
 
     def make_graph_batch(self, obs_batch):
         env_idx = int(obs_batch[0][-1])
-        print("HELLO", env_idx)
         graph_data = getattr(self, f"graph_info_{env_idx}", None)
         num_nodes = graph_data['num_nodes']
         edge_idx = graph_data['edge_idx']
@@ -242,6 +223,7 @@ class SKRLMessagePassingGNN(MessagePassingGNN, Model, GaussianMixin):
             device=device,
             **{k: v for k, v in kwargs.items() if k not in ['in_dim', 'num_nodes', 'mask']},
         )
+        self._last_distribution = None
         self.log_std_parameter = nn.Parameter(torch.zeros(action_space.shape[0], device=device))
 
     def compute(self, inputs, role=""):
@@ -254,6 +236,16 @@ class SKRLMessagePassingGNN(MessagePassingGNN, Model, GaussianMixin):
         mean, log_std, outputs = self.compute(inputs, role)
         std = log_std.exp()
         distribution = torch.distributions.Normal(mean, std)
+        self._last_distribution = distribution
         actions = distribution.sample()
         log_prob = distribution.log_prob(actions).sum(dim=-1, keepdim=True)
         return actions, log_prob, outputs
+
+    def distribution(self, role=""):
+        """Return the current distribution for tracking purposes"""
+        if hasattr(self, '_last_distribution'):
+            return self._last_distribution
+        else:  # Return a dummy distribution with correct shape
+            dummy_mean = torch.zeros(self.action_space.shape[0], device=self.device)
+            dummy_std = torch.ones(self.action_space.shape[0], device=self.device)
+            return torch.distributions.Normal(dummy_mean, dummy_std)

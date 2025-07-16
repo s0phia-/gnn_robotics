@@ -21,6 +21,7 @@ def run_worker(args):
     from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
     from skrl.memories.torch import RandomMemory
     from skrl.trainers.torch import SequentialTrainer
+
     def run(hparam, device):
         set_run_id(hparam['run_id'])
         logger = get_logger()
@@ -30,25 +31,10 @@ def run_worker(args):
         models, env = load_skrl_agent_and_env(hparam, device)
 
         cfg = PPO_DEFAULT_CONFIG.copy()
-        cfg.update({
-            # "state_preprocessor": None,
-            "rollouts": hparam.get("rollouts", 2048),
-            "learning_epochs": hparam.get("learning_epochs", 8),
-            "mini_batches": hparam.get("mini_batches", 32),
-            "learning_rate": hparam.get("learning_rate", 3e-4),
-            "discount_factor": hparam.get("discount_factor", 0.99),
-            "lambda": hparam.get("lambda", 0.95),
-            "clip_predicted_values": hparam.get("clip_predicted_values", False),
-            "entropy_loss_scale": hparam.get("entropy_loss_scale", 0.0),
-            "value_loss_scale": hparam.get("value_loss_scale", 1.0),
-            "kl_threshold": hparam.get("kl_threshold", 0),
-            "experiment": {
-                "directory": hparam.get("run_dir", "runs"),
-                "experiment_name": hparam.get("run_id", ""),
-                "write_interval": hparam.get("write_interval", 250),
-                "checkpoint_interval": hparam.get("checkpoint_interval", 1000),
-            }
-        })
+        cfg.update(hparam["ppo"])
+        cfg.update(hparam["trainer"])
+        cfg.update({"experiment": {"directory": hparam.get("run_dir", "runs"),
+                                   "experiment_name": hparam.get("run_id", "")}})
         memory = RandomMemory(
             memory_size=cfg["rollouts"],
             num_envs=1,
@@ -84,8 +70,6 @@ if __name__ == '__main__':
     from src.utils import load_hparams, plot_rewards_with_seeds
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=3)
-    print(hparams[0])
-
     if torch.cuda.is_available():  # GPU
         mp.set_start_method('spawn', force=True)
         num_gpus = torch.cuda.device_count()
@@ -96,12 +80,11 @@ if __name__ == '__main__':
         pool.close()
         pool.join()
     else:  # CPU
-        # print("CUDA not available, running on CPU")
-        # mp.set_start_method('spawn', force=True)
-        # pool = mp.Pool(processes=min(3, len(hparams)))
-        # results = pool.map(run_worker, hparams)
-        # pool.close()
-        # pool.join()
-        run_worker(hparams[0])
+        print("CUDA not available, running on CPU")
+        mp.set_start_method('spawn', force=True)
+        pool = mp.Pool(processes=min(3, len(hparams)))
+        results = pool.map(run_worker, hparams)
+        pool.close()
+        pool.join()
     plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
     # # plot_rewards_with_seeds('../runs/reg_plot/results')

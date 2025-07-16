@@ -103,7 +103,6 @@ class MujocoParser:
             env = IdentityWrapper(gym.make("src.environments:%s-v0" % env_name))
             # the following is the same for each env
             limb_obs_size = env.limb_obs_size
-            print("limb obs size:", limb_obs_size)
             max_action = env.max_action
         return limb_obs_size, max_action
 
@@ -263,9 +262,6 @@ class ModularEnvWrapper(gym.Wrapper):
         self.num_limbs = self.env.unwrapped.model.nbody - 1
         self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.action_space.high[0])
-        print(f"{self.obs_max_len=}")
-        print(f"{self.limb_obs_size=}")
-        print(f"{self.max_action=}")
 
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
@@ -278,9 +274,9 @@ class ModularEnvWrapper(gym.Wrapper):
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
         obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
-        terminated = torch.tensor(terminated, dtype=torch.bool)
-        truncated = torch.tensor(truncated, dtype=torch.bool)
-        reward = torch.tensor(reward, dtype=torch.float32)
+        terminated = torch.tensor([terminated], dtype=torch.bool).reshape(-1)
+        truncated = torch.tensor([truncated], dtype=torch.bool).reshape(-1)
+        reward = torch.tensor(reward, dtype=torch.float32).reshape(-1)
         return obs, reward, terminated, truncated, info
 
     def reset(self, seed=None, **kwargs):
