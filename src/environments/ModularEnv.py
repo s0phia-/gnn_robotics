@@ -15,9 +15,10 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # "render_fps": 25,
     }
 
-    def __init__(self, xml, seed=None, **kwargs):
+    def __init__(self, xml, idx,  seed=None, **kwargs):
         print(f"HERE: self.metadata: {self.metadata}")
         self.xml = xml
+        self.idx = idx
         render_mode = kwargs.get('render_mode', None)
         self._desired_render_mode = render_mode
         print(f"{self.xml=}")

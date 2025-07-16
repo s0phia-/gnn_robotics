@@ -32,6 +32,8 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
     base_seed = hparam.get('seed', 0)
     seeds = [base_seed + i * 100 for i in range(num_seeds)]
 
+    hparam['env_mapping'] = {env_name: idx for idx, env_name in enumerate(hparam['env_name'])}
+
     test_params = {k: v for k, v in hparam.items() if isinstance(v, list) and len(v) > 1}
     base_params = {k: v[0] if isinstance(v, list) and len(v) == 1 else v
                    for k, v in hparam.items() if k not in test_params}
@@ -60,8 +62,9 @@ def load_env(hparam, device):
     edges = create_edges(env, device)
     actuator_mask = check_actuators(env)
     env.reset()
-    hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim,
-                            'actuator_mask': actuator_mask}
+    env_idx = hparam['env_mapping'][hparam['env_name']]
+    hparam[f'graph_info_{env_idx}'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim,
+                                       'actuator_mask': actuator_mask}
     return env
 
 
@@ -78,7 +81,8 @@ def load_agent_and_env(hparam, device):
         agent = NerveNet
     else:
         raise ValueError(f"Method {method} not implemented")
-    graph_info = hparam['graph_info']
+    env_idx = hparam['env_mapping'][hparam['env_name']]
+    graph_info = hparam[f'graph_info_{env_idx}']
     edges = graph_info['edge_idx']
     in_degree = degree(edges[1], num_nodes=graph_info['num_nodes'])
     max_in = in_degree.max().item()
@@ -99,7 +103,8 @@ def load_skrl_agent_and_env(hparam, device):
         env.num_agents = 1
     if not hasattr(env, 'num_envs'):
         env.num_envs = 1
-    graph_info = hparam['graph_info']
+    env_idx = hparam['env_mapping'][hparam['env_name']]
+    graph_info = hparam[f'graph_info_{env_idx}']
     models = {"policy": SKRLMessagePassingGNN(
         observation_space=env.observation_space,
         action_space=env.action_space,

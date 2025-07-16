@@ -88,7 +88,8 @@ class MujocoParser:
             if not os.path.exists(os.path.join(self.env_dir, '{}.py'.format(env_name))):
                 # create a duplicate of gym environment file for each env (necessary for avoiding bug in gym)
                 copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
-            params = {'xml': os.path.abspath(xml)}
+            params = {'xml': os.path.abspath(xml),
+                      'idx': self.env_mapping[env_name]}
             # register with gym (check how it works)
 
             print(f"env registry params:")

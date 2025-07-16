@@ -160,40 +160,51 @@ class MessagePassingGNN(nn.Module):
                                device=device).to(device)
 
     def forward(self, data):
-        if isinstance(data, torch.Tensor) or isinstance(data, np.ndarray):
-            if isinstance(data, np.ndarray):
-                data = torch.tensor(data, dtype=torch.float, device=self.device)
-                print(f"DEBUG: states shape: {data.shape}")
-                print(f"DEBUG: states type: {type(data)}")
-
+        make_graph(data)
+        if isinstance(data, Data):
+            x, edge_index = data.x, data.edge_index
+            batch = data.batch
+        else:  # assume np array or torch tensor
+            data = torch.tensor(data, dtype=torch.float, device=self.device)
             if data.dim() == 1:  # single observation
                 obs_part = data[:135]
-                print(f"DEBUG: obs_part shape: {obs_part.shape}")
-                print(f"DEBUG: obs_part elements: {obs_part.numel()}")
                 edge_part = data[135:]  # todo
                 edge_index = edge_part.view(2, 16).long()
                 x = obs_part.view(self.num_nodes, -1)
                 batch = None
             else:  # Batch of observations
                 batch_size = data.shape[0]
-                print(f"DEBUG: batch_size: {batch_size}")
-                print(f"DEBUG: self.num_nodes: {self.num_nodes}")
-                obs_part = data[:, :135]   # todo
-                print(f"DEBUG: obs_part shape: {obs_part.shape}")
-                print(f"DEBUG: obs_part elements: {obs_part.numel()}")
-                edge_part = data[:, 135:]
+                for i in range(batch_size):
+
+                    obs_part = data[i, :135]
+                    edge_part = data[i, 135:]
+
                 edge_indices = edge_part.view(batch_size, 2, 16).long()
-                x = obs_part.view(batch_size * self.num_nodes, -1)
+                obs_per_node = 135 // self.num_nodes  # Should be 15
+                x = obs_part.view(batch_size, self.num_nodes, obs_per_node)
+                x = x.view(batch_size * self.num_nodes, obs_per_node)  # Flatten for GNN
+
                 batch = torch.arange(batch_size, device=self.device).repeat_interleave(self.num_nodes)
 
                 edge_index_batch = []
-                for i in range(batch_size):
-                    offset = i * self.num_nodes
-                    edge_index_batch.append(edge_indices[i] + offset)
+
+                offset = i * self.num_nodes
+                print(f"DEBUG: batch {i}, offset: {offset}")
+                print(f"DEBUG: edge_indices[{i}] before offset: {edge_indices[i]}")
+                adjusted_edges = edge_indices[i] + offset
+                print(f"DEBUG: adjusted_edges: {adjusted_edges}")
+                print(f"DEBUG: adjusted_edges max: {adjusted_edges.max()}")
+                edge_index_batch.append(adjusted_edges)
                 edge_index = torch.cat(edge_index_batch, dim=1)
-        else:
-            x, edge_index = data.x, data.edge_index
-            batch = data.batch
+                print(f"DEBUG: final edge_index shape: {edge_index.shape}")
+                print(f"DEBUG: final edge_index max: {edge_index.max()}")
+                print(f"DEBUG: final edge_index min: {edge_index.min()}")
+                print(f"DEBUG: total nodes in batch: {batch_size * self.num_nodes}")
+                max_node_id = batch_size * self.num_nodes - 1
+                invalid_edges = edge_index > max_node_id
+                if invalid_edges.any():
+                    print(f"ERROR: Found invalid edge indices! Max allowed: {max_node_id}")
+                    print(f"Invalid indices: {edge_index[invalid_edges]}")
 
         x = self.encoder(x=x)
 
@@ -252,10 +263,13 @@ class SKRLMessagePassingGNN(MessagePassingGNN, Model, GaussianMixin):
         return actions, log_prob, outputs
 
 
-def make_graph(obs, num_nodes, edge_index):
+def make_graph(obs):
     """
     make a pyg graph
     """
+    num_nodes = float(obs[-1])
+    node_feature_dim = float(obs[-2])
+    print("HI", node_feature_dim)
     x = obs.view(num_nodes, -1)
     return Data(x=x, edge_index=edge_index)
 
