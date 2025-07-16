@@ -1,6 +1,8 @@
-from src.agents.nerve_net import Gnnlayer
-from src.agents.method2 import *
+from src.agents import SKRLMixin, Method2Gnn
+from src.agents.nerve_net import *
 from torch_geometric.utils import scatter
+import torch
+import torch.nn as nn
 
 
 class Method1Gnn(Method2Gnn):
@@ -85,3 +87,18 @@ class GnnLayerDoubleMessage(Gnnlayer):
             return self.message_function_type1(msg)*self.morph_weight
         if edge_type == 2:  # FC
             return self.message_function_type2(msg)*(1-self.morph_weight)
+
+
+class SKRLMethod1GNN(Method1Gnn, SKRLMixin):
+    def __init__(self, observation_space, action_space, device, **kwargs):
+        SKRLMixin.__init__(self, observation_space, action_space, device, **kwargs)
+
+        Method1Gnn.__init__(
+            self,
+            in_dim=kwargs['in_dim'],
+            num_nodes=kwargs['num_nodes'],
+            action_dim=1,
+            mask=kwargs['mask'],
+            device=device,
+            **{k: v for k, v in kwargs.items() if k not in ['in_dim', 'num_nodes', 'mask']},
+        )
