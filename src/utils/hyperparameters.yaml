@@ -30,31 +30,29 @@ trainer:
 # GNN params
 method:
   - method1
-#  - method2
+  - method2
 #  - method5
-#  - NerveNet
+  - NerveNet
 propagation_steps:
   - 3
-#  - 4
-#  - 5
-#  - 6
+  - 4
 hidden_node_dim:
-#  - 32
+  - 32
   - 64
-#  - 128
+  - 128
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
   - 64
-#  - 128
-#  - 256
+  - 128
+  - 256
 morphology_fc_ratio:
-  - 0
-  - .2
-  - .4
+#  - 0
+#  - .2
+#  - .4
   - .5
-  - .6
-  - .8
-  - 1
+#  - .6
+#  - .8
+#  - 1
 
 #misc params
 seed: 5

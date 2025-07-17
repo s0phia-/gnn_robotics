@@ -7,11 +7,10 @@ class Method2Gnn(MessagePassingGNN):
                  in_dim: int,
                  num_nodes: int,
                  action_dim: int,
-                 mask: list,
                  device: torch.device,
                  **kwargs
                  ):
-        super().__init__(in_dim, num_nodes, action_dim, mask, device, **kwargs)
+        super().__init__(in_dim, num_nodes, action_dim, device, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(GnnLayerDoubleAgg(in_dim=self.hidden_node_dim,
@@ -22,8 +21,19 @@ class Method2Gnn(MessagePassingGNN):
                                                  morph_weight=self.morphology_fc_ratio))
 
     def forward(self, data):
-        x, edge_morph = data.x, data.edge_index
-        batch = data.batch
+        if isinstance(data, Data):  # if a pytorch geometric object
+            x, edge_index = data.x, data.edge_index
+            batch = data.batch
+        else:  # assume np array or torch tensor
+            data = torch.tensor(data, dtype=torch.float, device=self.device)
+            if data.dim() == 1:  # single observation
+                data, mask = self.make_graph(data)
+                x, edge_morph = data.x, data.edge_index
+                batch = None
+            else:  # Batch of observations
+                data, mask = self.make_graph_batch(data)
+                x, edge_morph = data.x, data.edge_index
+                batch = data.batch
 
         x = self.encoder(x=x)
 
@@ -49,14 +59,13 @@ class Method2Gnn(MessagePassingGNN):
         x = x.squeeze(0)
 
         if batch is not None:
-            num_graphs = batch.max().item() + 1
-            mask = self.mask.view(1, -1).repeat(num_graphs, 1).view(-1)
-            x = x.view(-1)[mask]
-            x = x.view(num_graphs, x.shape[0] // num_graphs)
+            batch_size = batch.max().item() + 1
+            x = x.view(batch_size, self.num_nodes)
+            x = x[:, mask]
             return x
 
         else:
-            x = x[self.mask]
+            x = x[mask]
             return x
 
 
@@ -107,3 +116,19 @@ class GnnLayerDoubleAgg(Gnnlayer):
             return self.message_function_type1(msg)*self.morph_weight
         if edge_type == 2:  # fully connected
             return self.message_function_type2(msg)*(1-self.morph_weight)
+
+
+class SKRLMethod2GNN(Method2Gnn, SKRLMixin):
+    def __init__(self, observation_space, action_space, device, **kwargs):
+
+        SKRLMixin.__init__(self, observation_space, action_space, device, **kwargs)
+        Method2Gnn.__init__(
+            self,
+            in_dim=kwargs['in_dim'],
+            num_nodes=kwargs['num_nodes'],
+            action_dim=1,
+            device=device,
+            **{k: v for k, v in kwargs.items() if k not in ['in_dim', 'num_nodes', 'mask']},
+        )
+        self._last_distribution = None
+        self.log_std_parameter = nn.Parameter(torch.zeros(action_space.shape[0], device=device))

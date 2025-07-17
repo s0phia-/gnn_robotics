@@ -6,7 +6,7 @@ import itertools
 from torch_geometric.utils import degree
 from copy import deepcopy
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
-from src.agents import *
+from src.agents import SKRLFeedForward, SKRLMethod1GNN, SKRLMessagePassingGNN, SKRLMethod2GNN
 
 
 def load_hparams(yaml_hparam_path, num_seeds=5):
@@ -99,13 +99,22 @@ def load_agent_and_env(hparam, device):
 
 def load_skrl_agent_and_env(hparam, device):
     env = load_env(hparam, device)
+    method = hparam['method']
+    if method == "method1":
+        agent = SKRLMethod1GNN
+    elif method == "NerveNet":
+        agent = SKRLMessagePassingGNN
+    elif method == "method2":
+        agent = SKRLMethod2GNN
+    else:
+        raise ValueError(f"Method {method} not implemented")
     if not hasattr(env, 'num_agents'):
         env.num_agents = 1
     if not hasattr(env, 'num_envs'):
         env.num_envs = 1
     env_idx = hparam['env_mapping'][hparam['env_name']]
     graph_info = hparam[f'graph_info_{env_idx}']
-    models = {"policy": SKRLMessagePassingGNN(
+    models = {"policy": agent(
         observation_space=env.observation_space,
         action_space=env.action_space,
         device=device,

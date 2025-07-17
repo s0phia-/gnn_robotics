@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
 from torch_geometric.data import Data, Batch
-from src.agents import SKRLMixin
+from src.agents.skrl_adapting_class import SKRLMixin
 
 
 class Encoder(nn.Module):
@@ -211,8 +211,8 @@ class MessagePassingGNN(nn.Module):
 
 class SKRLMessagePassingGNN(MessagePassingGNN, SKRLMixin):
     def __init__(self, observation_space, action_space, device, **kwargs):
-        SKRLMixin.__init__(self, observation_space, action_space, device, **kwargs)
 
+        SKRLMixin.__init__(self, observation_space, action_space, device, **kwargs)
         MessagePassingGNN.__init__(
             self,
             in_dim=kwargs['in_dim'],
@@ -221,3 +221,5 @@ class SKRLMessagePassingGNN(MessagePassingGNN, SKRLMixin):
             device=device,
             **{k: v for k, v in kwargs.items() if k not in ['in_dim', 'num_nodes', 'mask']},
         )
+        self._last_distribution = None
+        self.log_std_parameter = nn.Parameter(torch.zeros(action_space.shape[0], device=device))

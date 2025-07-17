@@ -1,5 +1,6 @@
-from src.agents import SKRLMixin, Method2Gnn
-from src.agents.nerve_net import *
+from src.agents.method2 import Method2Gnn
+from src.agents.skrl_adapting_class import SKRLMixin
+from src.agents.nerve_net import Gnnlayer, add_self_loops
 from torch_geometric.utils import scatter
 import torch
 import torch.nn as nn
@@ -10,11 +11,10 @@ class Method1Gnn(Method2Gnn):
                  in_dim: int,
                  num_nodes: int,
                  action_dim: int,
-                 mask: list,
                  device: torch.device,
                  **kwargs
                  ):
-        super().__init__(in_dim, num_nodes, action_dim, mask, device, **kwargs)
+        super().__init__(in_dim, num_nodes, action_dim, device, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(GnnLayerDoubleMessage(in_dim=self.hidden_node_dim,
@@ -91,14 +91,15 @@ class GnnLayerDoubleMessage(Gnnlayer):
 
 class SKRLMethod1GNN(Method1Gnn, SKRLMixin):
     def __init__(self, observation_space, action_space, device, **kwargs):
-        SKRLMixin.__init__(self, observation_space, action_space, device, **kwargs)
 
+        SKRLMixin.__init__(self, observation_space, action_space, device, **kwargs)
         Method1Gnn.__init__(
             self,
             in_dim=kwargs['in_dim'],
             num_nodes=kwargs['num_nodes'],
             action_dim=1,
-            mask=kwargs['mask'],
             device=device,
             **{k: v for k, v in kwargs.items() if k not in ['in_dim', 'num_nodes', 'mask']},
         )
+        self._last_distribution = None
+        self.log_std_parameter = nn.Parameter(torch.zeros(action_space.shape[0], device=device))

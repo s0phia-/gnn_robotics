@@ -4,14 +4,9 @@ from skrl.models.torch import Model, GaussianMixin
 
 
 class SKRLMixin(Model, GaussianMixin):
-    """Mixin class containing SKRL-specific methods"""
-
     def __init__(self, observation_space, action_space, device, **kwargs):
-        Model.__init__(self, observation_space=observation_space, action_space=action_space, device=device)
+        super().__init__(observation_space=observation_space, action_space=action_space, device=device)
         GaussianMixin.__init__(self, clip_actions=True)
-
-        self._last_distribution = None
-        self.log_std_parameter = nn.Parameter(torch.zeros(action_space.shape[0], device=device))
 
     def compute(self, inputs, role=""):
         states = inputs["states"]
