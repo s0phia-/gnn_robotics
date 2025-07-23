@@ -1,7 +1,7 @@
 #env params
 env_name:
   - ant
-max_episodic_timesteps: 2000
+max_episodic_timesteps: 500
 enable_features: True
 
 ppo:
@@ -13,9 +13,10 @@ ppo:
   grad_norm_clip: 5
   kl_threshold: 0.1
   mini_batch_size: 64
+  rollouts: 2048
 
 trainer:
-  timesteps: 1e6
+  timesteps: 1000000
   headless: true
   write_interval: 100
   checkpoint_interval: 1000
@@ -30,21 +31,22 @@ trainer:
 # GNN params
 method:
   - method1
-  - method2
+#  - method2
 #  - method5
-  - NerveNet
+#  - NerveNet
+#  - MLP
 propagation_steps:
   - 3
-  - 4
+#  - 4
 hidden_node_dim:
   - 32
-  - 64
-  - 128
+#  - 64
+#  - 128
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
   - 64
-  - 128
-  - 256
+#  - 128
+#  - 256
 morphology_fc_ratio:
 #  - 0
 #  - .2

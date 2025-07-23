@@ -1,6 +1,5 @@
-from .method1 import Method1Gnn, SKRLMethod1GNN
-from .method2 import Method2Gnn, SKRLMethod2GNN
-from .method5 import Method5Gnn
-from .nerve_net import MessagePassingGNN as NerveNet, SKRLMessagePassingGNN
+from .method1 import Method1Gnn, SkrlMethod1
+from .method2 import Method2Gnn, SkrlMethod2
+# from .method5 import Method5Gnn
+from .nerve_net import MessagePassingGNN as NerveNet, SkrlNerveNet
 from .feed_forward import FeedForward, SKRLFeedForward
-from .skrl_adapting_class import SKRLMixin

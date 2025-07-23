@@ -6,7 +6,7 @@ import itertools
 from torch_geometric.utils import degree
 from copy import deepcopy
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
-from src.agents import SKRLFeedForward, SKRLMethod1GNN, SKRLMessagePassingGNN, SKRLMethod2GNN
+from src.agents import SKRLFeedForward, SkrlNerveNet, SkrlMethod1, SkrlMethod2
 
 
 def load_hparams(yaml_hparam_path, num_seeds=5):
@@ -101,11 +101,13 @@ def load_skrl_agent_and_env(hparam, device):
     env = load_env(hparam, device)
     method = hparam['method']
     if method == "method1":
-        agent = SKRLMethod1GNN
+        agent = SkrlMethod1
     elif method == "NerveNet":
-        agent = SKRLMessagePassingGNN
+        agent = SkrlNerveNet
     elif method == "method2":
-        agent = SKRLMethod2GNN
+        agent = SkrlMethod2
+    elif method == "MLP":
+        agent = SKRLFeedForward
     else:
         raise ValueError(f"Method {method} not implemented")
     if not hasattr(env, 'num_agents'):
@@ -114,20 +116,66 @@ def load_skrl_agent_and_env(hparam, device):
         env.num_envs = 1
     env_idx = hparam['env_mapping'][hparam['env_name']]
     graph_info = hparam[f'graph_info_{env_idx}']
-    models = {"policy": agent(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        device=device,
-        in_dim=graph_info['node_dim'],
-        num_nodes=graph_info['num_nodes'],
-        mask=graph_info['actuator_mask'],
-        edge_index=graph_info['edge_idx'],
-        **hparam
-    ), "value": SKRLFeedForward(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        device=device,
-        hidden_dim=hparam.get('decoder_and_message_hidden_dim', 64),
-        hidden_layers=hparam.get('decoder_and_message_layers', 3)
-    )}
+    models = {"policy": agent(observation_space=env.observation_space,
+                              action_space=env.action_space,
+                              device=device,
+                              num_nodes=graph_info['num_nodes'],
+                              **hparam),
+              "value": SKRLFeedForward(observation_space=env.observation_space,
+                                       action_space=env.action_space,
+                                       device=device,
+                                       hidden_dim=hparam.get('decoder_and_message_hidden_dim', 64),
+                                       hidden_layers=hparam.get('decoder_and_message_layers', 3)
+                                       )}
     return models, env
+
+
+def run_worker(args):
+    """Worker function that handles both GPU and CPU cases"""
+    import torch
+    if len(args) == 2:  # GPU
+        hparam, gpu_id = args
+        device = torch.device(f'cuda:{gpu_id}')
+        torch.cuda.set_device(gpu_id)
+    else:  # CPU
+        hparam = args
+        device = torch.device('cpu')
+    from src.utils import load_skrl_agent_and_env, set_run_id, get_logger
+    from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
+    from skrl.memories.torch import RandomMemory
+    from skrl.trainers.torch import SequentialTrainer
+
+    def run(hparam, device):
+        set_run_id(hparam['run_id'])
+        logger = get_logger()
+        logger.info(f"Starting run with parameters: {hparam['run_id']} on {device}")
+        if device.type == 'cuda':
+            logger.info(f"Current GPU in run(): {torch.cuda.current_device()}")
+        models, env = load_skrl_agent_and_env(hparam, device)
+
+        cfg = PPO_DEFAULT_CONFIG.copy()
+        cfg.update(hparam["ppo"])
+        cfg.update(hparam["trainer"])
+        cfg["rewards_shaper"] = lambda rewards, timestep, timesteps: rewards * 0.01
+        # cfg["learning_rate_scheduler"] = KLAdaptiveRL
+        cfg["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
+        cfg.update({"experiment": {"directory": hparam.get("run_dir", "runs"),
+                                   "experiment_name": hparam.get("run_id", "")}})
+
+        memory = RandomMemory(
+            memory_size=cfg["rollouts"],
+            num_envs=1,
+            device=device
+        )
+        agent = PPO(
+            models=models,
+            memory=memory,
+            cfg=cfg,
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            device=device)
+
+        trainer = SequentialTrainer(cfg=cfg, env=env, agents=agent)
+        trainer.train()
+
+    return run(hparam, device)

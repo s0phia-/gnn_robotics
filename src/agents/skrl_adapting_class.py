@@ -9,13 +9,17 @@ class SKRLMixin(Model, GaussianMixin):
         GaussianMixin.__init__(self, clip_actions=True)
 
     def compute(self, inputs, role=""):
-        states = inputs["states"]
-        mean = self.forward(states)
+        outputs = self.forward(inputs["states"])
+        if role == "value":
+            return outputs, None, {}
+        mean = outputs
         log_std = self.log_std_parameter.expand_as(mean)
         return mean, log_std, {}
 
     def act(self, inputs, role=""):
         mean, log_std, outputs = self.compute(inputs, role)
+        if role == "value":
+            return mean, {}, outputs
         std = log_std.exp()
         distribution = torch.distributions.Normal(mean, std)
         self._last_distribution = distribution
