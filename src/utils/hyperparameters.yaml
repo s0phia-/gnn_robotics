@@ -31,19 +31,19 @@ trainer:
 # GNN params
 method:
   - method1
-#  - method2
+  - method2
 #  - method5
-#  - NerveNet
-#  - MLP
+  - NerveNet
+  - MLP
 propagation_steps:
   - 3
 #  - 4
-hidden_node_dim:
+node_representation_dim:
   - 32
 #  - 64
 #  - 128
-decoder_and_message_layers: 2
-decoder_and_message_hidden_dim:
+hidden_layers: 2
+hidden_dim:
   - 64
 #  - 128
 #  - 256

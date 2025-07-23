@@ -13,10 +13,10 @@ class Method2Gnn(MessagePassingGNN):
         super().__init__(in_dim, num_nodes, action_dim, device, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
-            self.middle.append(GnnLayerDoubleAgg(in_dim=self.hidden_node_dim,
-                                                 out_dim=self.hidden_node_dim,
-                                                 hidden_dim=self.decoder_and_message_hidden_dim,
-                                                 hidden_layers=self.decoder_and_message_layers,
+            self.middle.append(GnnLayerDoubleAgg(in_dim=self.node_representation_dim,
+                                                 out_dim=self.node_representation_dim,
+                                                 hidden_dim=self.hidden_dim,
+                                                 hidden_layers=self.hidden_layers,
                                                  device=device,
                                                  morph_weight=self.morphology_fc_ratio))
 

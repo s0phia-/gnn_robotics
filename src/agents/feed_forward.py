@@ -41,7 +41,8 @@ class SKRLFeedForward(GaussianMixin, DeterministicMixin, Model):
                  clip_log_std=True,
                  min_log_std=-20,
                  max_log_std=2,
-                 reduction="sum"):
+                 reduction="sum",
+                 **kwargs):
         Model.__init__(self, observation_space, action_space, device)
         GaussianMixin.__init__(self, clip_actions, clip_log_std, min_log_std, max_log_std, reduction)
         DeterministicMixin.__init__(self, clip_actions)

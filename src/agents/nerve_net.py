@@ -123,21 +123,21 @@ class MessagePassingGNN(nn.Module):
         self.device = device
 
         self.encoder = Encoder(in_dim=in_dim,
-                               hidden_dim=self.hidden_node_dim,
+                               hidden_dim=self.node_representation_dim,
                                device=device).to(device)
 
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
-            self.middle.append(Gnnlayer(in_dim=self.hidden_node_dim,
-                                        out_dim=self.hidden_node_dim,
-                                        hidden_dim=self.decoder_and_message_hidden_dim,
-                                        hidden_layers=self.decoder_and_message_layers,
+            self.middle.append(Gnnlayer(in_dim=self.node_representation_dim,
+                                        out_dim=self.node_representation_dim,
+                                        hidden_dim=self.hidden_dim,
+                                        hidden_layers=self.hidden_layers,
                                         device=device))
 
         self.decoder = Decoder(out_dim=action_dim,
-                               in_dim=self.hidden_node_dim,
-                               hidden_dim=self.decoder_and_message_hidden_dim,
-                               hidden_layers=self.decoder_and_message_layers,
+                               in_dim=self.node_representation_dim,
+                               hidden_dim=self.hidden_dim,
+                               hidden_layers=1,
                                device=device).to(device)
 
     def make_graph(self, obs):
