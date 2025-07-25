@@ -1,5 +1,6 @@
 #env params
 env_name:
+  - humanoid
   - ant
 max_episodic_timesteps: 500
 enable_features: True
@@ -25,9 +26,9 @@ trainer:
 
 method:
   - method1
-#  - method2
+  - method2
   - NerveNet
-  - MLP
+#  - MLP
 propagation_steps:
   - 3
   - 4
@@ -41,7 +42,7 @@ network_shape:
   - [64,64]
   - [128,128]
   - [254, 254]
-  - [64, 64, 64]
+#  - [64, 64, 64]
 morphology_fc_ratio:
 #  - 0
 #  - .2
