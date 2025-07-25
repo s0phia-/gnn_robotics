@@ -122,18 +122,18 @@ class MessagePassingGNN(nn.Module):
         self.device = device
 
         self.encoder = Encoder(in_dim=in_dim,
-                               hidden_dim=self.node_representation_dim,
+                               hidden_dim=self.node_hidden_size,
                                device=device).to(device)
 
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
-            self.middle.append(Gnnlayer(in_dim=self.node_representation_dim,
-                                        out_dim=self.node_representation_dim,
+            self.middle.append(Gnnlayer(in_dim=self.node_hidden_size,
+                                        out_dim=self.node_hidden_size,
                                         hidden_shape=self.network_shape,
                                         device=device))
 
         self.decoder = Decoder(out_dim=action_dim,
-                               in_dim=self.node_representation_dim,
+                               in_dim=self.node_hidden_size,
                                hidden_shape=self.network_shape,
                                device=device).to(device)
 

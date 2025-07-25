@@ -17,8 +17,8 @@ class Method1Gnn(Method2Gnn):
         super().__init__(in_dim, num_nodes, action_dim, device, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
-            self.middle.append(GnnLayerDoubleMessage(in_dim=self.node_representation_dim,
-                                                     out_dim=self.node_representation_dim,
+            self.middle.append(GnnLayerDoubleMessage(in_dim=self.node_hidden_size,
+                                                     out_dim=self.node_hidden_size,
                                                      hidden_shape=self.network_shape,
                                                      device=device,
                                                      morph_weight=self.morphology_fc_ratio))
