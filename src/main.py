@@ -15,12 +15,9 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 if __name__ == '__main__':
     import torch
-    from src.utils import load_hparams, plot_rewards_with_seeds
+    from src.utils import load_hparams
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=3)
-    for i in len(hparams):
-        print(f"hello hparams {i}", hparams[i])
-
     # if torch.cuda.is_available():  # GPU
     #     mp.set_start_method('spawn', force=True)
     #     mp.set_sharing_strategy('file_system')
@@ -30,10 +27,8 @@ if __name__ == '__main__':
     #     with mp.Pool(processes=min(num_gpus, len(hparams))) as pool:
     #         results = pool.map(run_worker, gpu_assignments)
     # else:  # CPU
-    # print("CUDA not available, running on CPU")
-    # mp.set_start_method('spawn', force=True)
-    # mp.set_sharing_strategy('file_system')
-    # with mp.Pool(processes=min(4, len(hparams))) as pool:
-    #     results = pool.map(run_worker, hparams)
-    # plot_rewards_with_seeds(f'{hparams[0]["run_dir"]}/results')
-    # # plot_rewards_with_seeds('../runs/reg_plot/results')
+    print("CUDA not available, running on CPU")
+    mp.set_start_method('spawn', force=True)
+    mp.set_sharing_strategy('file_system')
+    with mp.Pool(processes=min(5, len(hparams))) as pool:
+        results = pool.map(run_worker, hparams)
