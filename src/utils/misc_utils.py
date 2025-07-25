@@ -4,55 +4,97 @@ import datetime
 import yaml
 import itertools
 from torch_geometric.utils import degree
+from skrl.agents.torch.ppo import PPO_DEFAULT_CONFIG
+# from tensorboard.plugins.hparams import api as hp
 from copy import deepcopy
 from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
 from src.agents import SKRLFeedForward, SkrlNerveNet, SkrlMethod1, SkrlMethod2
 
 
-def load_hparams(yaml_hparam_path, num_seeds=5):
-    """
-    :param yaml_hparam_path: path to YAML hyperparameters
-    :param num_seeds: number of different seeds to use
-    """
+def load_hparams(yaml_hparam_path, num_seeds=5, experiment_name=None):
     with open(yaml_hparam_path, 'r') as f:
         hparam = yaml.safe_load(f)
-    run_dir = f"../runs/run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    os.makedirs(run_dir, exist_ok=True)
-    os.makedirs(f"{run_dir}/checkpoints", exist_ok=True)
-    yaml_filename = os.path.basename(yaml_hparam_path)
-    shutil.copy2(yaml_hparam_path, os.path.join(run_dir, yaml_filename))
-    if hparam['load_run_path'] is None:
-        os.makedirs(f"{run_dir}/logs", exist_ok=True)
-        os.makedirs(f"{run_dir}/results", exist_ok=True)
-    else:
-        load_dir = f'../runs/{hparam["load_run_path"]}'
-        shutil.copytree(f'{load_dir}/logs', f"{run_dir}/logs")
-        shutil.copytree(f'{load_dir}/results', f"{run_dir}/results")
 
-    base_seed = hparam.get('seed', 0)
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    base_run_dir = f"../runs/{experiment_name or f'exp_{timestamp}'}"
+
+    os.makedirs(f"{base_run_dir}/configs", exist_ok=True)
+    shutil.copy2(yaml_hparam_path, f"{base_run_dir}/configs/{os.path.basename(yaml_hparam_path)}")
+
+    base_seed = hparam.get('seed', 42)
     seeds = [base_seed + i * 100 for i in range(num_seeds)]
-
     hparam['env_mapping'] = {env_name: idx for idx, env_name in enumerate(hparam['env_name'])}
 
     test_params = {k: v for k, v in hparam.items() if isinstance(v, list) and len(v) > 1}
-    base_params = {k: v[0] if isinstance(v, list) and len(v) == 1 else v
+    base_params = {k: v[0] if isinstance(v, list) else v
                    for k, v in hparam.items() if k not in test_params}
-    param_names = list(test_params.keys())
-    param_values = list(test_params.values())
+
     all_combinations = []
 
-    for combination in itertools.product(*param_values):
+    if test_params:
+        param_names = list(test_params.keys())
+        param_values = list(test_params.values())
+
+        for combination in itertools.product(*param_values):
+            for seed in seeds:
+                hparams = deepcopy(base_params)
+                for i, param_name in enumerate(param_names):
+                    hparams[param_name] = combination[i]
+
+                # Only create combo name if multiple parameters are being swept
+                if len(param_names) > 1:
+                    combo_name = "_".join([f"{param_names[i]}-{combination[i]}" for i in range(len(param_names))])
+                    tensorboard_dir = f"{base_run_dir}/ppo/{hparams.get('env_name', 'unknown')}/{hparams.get('method', 'unknown')}/{combo_name}/seed_{seed:03d}"
+                    experiment_name = f"{hparams.get('method', 'unknown')}_{hparams.get('env_name', 'unknown')}_{combo_name}"
+                else:
+                    # Single parameter sweep - no combo folder needed
+                    tensorboard_dir = f"{base_run_dir}/ppo/{hparams.get('env_name', 'unknown')}/{hparams.get('method', 'unknown')}/seed_{seed:03d}"
+                    experiment_name = f"{hparams.get('method', 'unknown')}_{hparams.get('env_name', 'unknown')}"
+
+                hparams.update({
+                    'seed': seed,
+                    'tensorboard_dir': tensorboard_dir,
+                    'experiment_name': experiment_name,
+                    'run_id': f"{hparams.get('method', 'unknown')}_seed-{seed}"
+                })
+                hparams['skrl_config'] = create_skrl_config(hparams)
+                all_combinations.append(hparams)
+    else:
         for seed in seeds:
             hparams = deepcopy(base_params)
-            for i, param_name in enumerate(param_names):
-                hparams[param_name] = combination[i]
-            hparams['seed'] = seed
-            run_id = ",".join([f"{param_name}-{combination[i]}" for i, param_name in enumerate(param_names)])
-            run_id += f",seed-{seed}"
-            hparams['run_id'] = run_id
-            hparams['run_dir'] = run_dir
+            method_name = hparams.get('method', 'unknown')
+            env_name = hparams.get('env_name', 'unknown')
+
+            hparams.update({
+                'seed': seed,
+                'tensorboard_dir': f"{base_run_dir}/ppo/{env_name}/{method_name}/seed_{seed:03d}",
+                'experiment_name': f"{method_name}_{env_name}",
+                'run_id': f"{method_name}_{env_name}_seed-{seed}"
+            })
+            hparams['skrl_config'] = create_skrl_config(hparams)
             all_combinations.append(hparams)
+
     return all_combinations
+
+
+# CHANGE: Added standalone function to replace lambda (for multiprocessing compatibility)
+def reward_shaper(rewards, timestep, timesteps):
+    return rewards * 0.01
+
+
+def create_skrl_config(hparam):
+    cfg = PPO_DEFAULT_CONFIG.copy()
+    cfg.update(hparam.get("ppo", {}))
+    cfg.update(hparam.get("trainer", {}))
+    cfg["rewards_shaper"] = reward_shaper  # CHANGE: Use function instead of lambda
+    cfg["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
+    cfg["experiment"] = {
+        "directory": hparam["tensorboard_dir"],
+        "experiment_name": hparam["experiment_name"],
+        "write_interval": hparam.get("write_interval", 100),
+        "checkpoint_interval": hparam.get("checkpoint_interval", 1000),
+    }
+    return cfg
 
 
 def load_env(hparam, device):
@@ -153,14 +195,7 @@ def run_worker(args):
             logger.info(f"Current GPU in run(): {torch.cuda.current_device()}")
         models, env = load_skrl_agent_and_env(hparam, device)
 
-        cfg = PPO_DEFAULT_CONFIG.copy()
-        cfg.update(hparam["ppo"])
-        cfg.update(hparam["trainer"])
-        cfg["rewards_shaper"] = lambda rewards, timestep, timesteps: rewards * 0.01
-        # cfg["learning_rate_scheduler"] = KLAdaptiveRL
-        cfg["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
-        cfg.update({"experiment": {"directory": hparam.get("run_dir", "runs"),
-                                   "experiment_name": hparam.get("run_id", "")}})
+        cfg = hparam['skrl_config']
 
         memory = RandomMemory(
             memory_size=cfg["rollouts"],

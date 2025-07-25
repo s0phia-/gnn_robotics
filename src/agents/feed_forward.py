@@ -7,21 +7,21 @@ from skrl.models.torch import Model, GaussianMixin, DeterministicMixin
 class FeedForward(nn.Module):
     def __init__(self,
                  in_dim: int,
+                 hidden_shape: list,
                  out_dim: int,
-                 device: torch.device,
-                 hidden_dim: int = 64,
-                 hidden_layers: int = 3):
+                 device: torch.device):
         """
         Feed forward Neural Network
         :param in_dim: dimensions of input to network
         :param out_dim: dimensions of output of network
         """
         nn.Module.__init__(self)
-        self.layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.ReLU()]
-        for _ in range(hidden_layers - 1):
-            self.layers.append(nn.Linear(hidden_dim, hidden_dim, device=device))
+
+        self.layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.ReLU()]
+        for i in range(len(hidden_shape) - 1):
+            self.layers.append(nn.Linear(hidden_shape[i], hidden_shape[i + 1], device=device))
             self.layers.append(nn.ReLU())
-        self.layers.append(nn.Linear(hidden_dim, out_dim, device=device))
+        self.layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
         self.layers = nn.Sequential(*self.layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -35,8 +35,7 @@ class SKRLFeedForward(GaussianMixin, DeterministicMixin, Model):
                  observation_space,
                  action_space,
                  device,
-                 hidden_dim=64,
-                 hidden_layers=3,
+                 hidden_shape=[64,64],
                  clip_actions=False,
                  clip_log_std=True,
                  min_log_std=-20,
@@ -50,9 +49,11 @@ class SKRLFeedForward(GaussianMixin, DeterministicMixin, Model):
         in_dim = observation_space.shape[0] - 1
 
         self.policy_network = FeedForward(in_dim=in_dim,
+                                          hidden_shape=hidden_shape,
                                           out_dim=self.num_actions,
                                           device=device)
         self.value_network = FeedForward(in_dim=in_dim,
+                                         hidden_shape=hidden_shape,
                                          out_dim=1,
                                          device=device)
 

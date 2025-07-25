@@ -32,8 +32,7 @@ class Gnnlayer(MessagePassing):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
-                 hidden_dim: int,
-                 hidden_layers: int,
+                 hidden_shape: list,
                  device: torch.device,
                  aggregator_type: str = 'mean'):
         """
@@ -48,18 +47,18 @@ class Gnnlayer(MessagePassing):
         self.device = device
 
         # construct message function
-        self.message_function = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
+        self.message_function = self._build_mlp(in_dim * 2, hidden_shape, out_dim, device)
 
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim, hidden_size=out_dim, device=device)
 
     @staticmethod
-    def _build_mlp(in_dim, hidden_dim, out_dim, hidden_layers, device):
-        layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.Tanh()]
-        for _ in range(hidden_layers - 1):
-            layers.append(nn.Linear(hidden_dim, hidden_dim, device=device))
+    def _build_mlp(in_dim, hidden_shape, out_dim, device):
+        layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
+        for i in range(len(hidden_shape) - 1):
+            layers.append(nn.Linear(hidden_shape[i], hidden_shape[i+1], device=device))
             layers.append(nn.Tanh())
-        layers.append(nn.Linear(hidden_dim, out_dim, device=device))
+        layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
         return nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
@@ -78,8 +77,7 @@ class Decoder(nn.Module):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
-                 hidden_dim: int,
-                 hidden_layers: int,
+                 hidden_shape: list,
                  device: torch.device):
         """
         A decoder network, part four of the NerveNet Message Passing GNN architecture.
@@ -89,11 +87,12 @@ class Decoder(nn.Module):
         :param device:
         """
         super().__init__()
-        self.layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.Tanh()]
-        for _ in range(hidden_layers - 1):
-            self.layers.append(nn.Linear(hidden_dim, hidden_dim, device=device))
+
+        self.layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
+        for i in range(len(hidden_shape) - 1):
+            self.layers.append(nn.Linear(hidden_shape[i], hidden_shape[i + 1], device=device))
             self.layers.append(nn.Tanh())
-        self.layers.append(nn.Linear(hidden_dim, out_dim, device=device))
+        self.layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
         self.layers = nn.Sequential(*self.layers)
 
     def forward(self, x: torch.Tensor):
@@ -130,14 +129,12 @@ class MessagePassingGNN(nn.Module):
         for _ in range(self.propagation_steps):
             self.middle.append(Gnnlayer(in_dim=self.node_representation_dim,
                                         out_dim=self.node_representation_dim,
-                                        hidden_dim=self.hidden_dim,
-                                        hidden_layers=self.hidden_layers,
+                                        hidden_shape=self.network_shape,
                                         device=device))
 
         self.decoder = Decoder(out_dim=action_dim,
                                in_dim=self.node_representation_dim,
-                               hidden_dim=self.hidden_dim,
-                               hidden_layers=1,
+                               hidden_shape=self.network_shape,
                                device=device).to(device)
 
     def make_graph(self, obs):

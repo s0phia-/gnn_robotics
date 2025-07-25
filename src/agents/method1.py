@@ -19,8 +19,7 @@ class Method1Gnn(Method2Gnn):
         for _ in range(self.propagation_steps):
             self.middle.append(GnnLayerDoubleMessage(in_dim=self.node_representation_dim,
                                                      out_dim=self.node_representation_dim,
-                                                     hidden_dim=self.hidden_dim,
-                                                     hidden_layers=self.hidden_layers,
+                                                     hidden_shape=self.network_shape,
                                                      device=device,
                                                      morph_weight=self.morphology_fc_ratio))
 
@@ -29,8 +28,7 @@ class GnnLayerDoubleMessage(Gnnlayer):
     def __init__(self,
                  in_dim: int,
                  out_dim: int,
-                 hidden_dim: int,
-                 hidden_layers: int,
+                 hidden_shape: list,
                  device: torch.device,
                  aggregator_type: str = 'mean',
                  morph_weight: float = .5, ):
@@ -38,19 +36,19 @@ class GnnLayerDoubleMessage(Gnnlayer):
         Message passing GNN layer with two edge types, each aggregated separately and then combined in an update
         function which now takes the form h_{t+1} = U(h_t, agg1, agg2) where agg1 and agg2 are the separately aggregated
         messages.
-        :param message_hidden_layers:
-        :param message_hidden_dim:
-        :param update_hidden_layers:
-        :param update_hidden_dim:
+        :param in_dim: input dimensions
+        :param out_dim: output dimensions
+        :param hidden_shape: hidden dimensions
         :param device:
+        :param aggregator_type: aggregation function for GNN. Examples: mean, sum
         :param morph_weight: morphology weighting. Fully connected weighting will be 1-morph_weight
         """
-        super().__init__(in_dim, out_dim, hidden_dim, hidden_layers, device, aggregator_type)
+        super().__init__(in_dim, out_dim, hidden_shape, device, aggregator_type)
         self.morph_weight = morph_weight
 
         # construct message functions
-        self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
-        self.message_function_type2 = self._build_mlp(in_dim * 2, hidden_dim, out_dim, hidden_layers, device)
+        self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_shape, out_dim, device)
+        self.message_function_type2 = self._build_mlp(in_dim * 2, hidden_shape, out_dim, device)
 
     def forward(self, x: torch.Tensor, edge_morph: torch.Tensor, edge_fc: torch.Tensor) -> torch.Tensor:
         """
