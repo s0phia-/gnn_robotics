@@ -3,12 +3,8 @@ import os
 import datetime
 import yaml
 import itertools
-from torch_geometric.utils import degree
-from skrl.agents.torch.ppo import PPO_DEFAULT_CONFIG
 # from tensorboard.plugins.hparams import api as hp
 from copy import deepcopy
-from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
-from src.agents import SKRLFeedForward, SkrlNerveNet, SkrlMethod1, SkrlMethod2
 
 
 def load_hparams(yaml_hparam_path, num_seeds=5, experiment_name=None):
@@ -25,9 +21,33 @@ def load_hparams(yaml_hparam_path, num_seeds=5, experiment_name=None):
     seeds = [base_seed + i * 100 for i in range(num_seeds)]
     hparam['env_mapping'] = {env_name: idx for idx, env_name in enumerate(hparam['env_name'])}
 
-    test_params = {k: v for k, v in hparam.items() if isinstance(v, list) and len(v) > 1}
+    # Flatten nested parameters for sweeping
+    def flatten_params(params, prefix=''):
+        flat = {}
+        for k, v in params.items():
+            key = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, dict):
+                flat.update(flatten_params(v, key))
+            else:
+                flat[key] = v
+        return flat
+    
+    def unflatten_params(flat_params):
+        nested = {}
+        for key, value in flat_params.items():
+            parts = key.split('.')
+            current = nested
+            for part in parts[:-1]:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            current[parts[-1]] = value
+        return nested
+    
+    flat_params = flatten_params(hparam)
+    test_params = {k: v for k, v in flat_params.items() if isinstance(v, list) and len(v) > 1}
     base_params = {k: v[0] if isinstance(v, list) else v
-                   for k, v in hparam.items() if k not in test_params}
+                   for k, v in flat_params.items() if k not in test_params}
 
     all_combinations = []
 
@@ -40,6 +60,9 @@ def load_hparams(yaml_hparam_path, num_seeds=5, experiment_name=None):
                 hparams = deepcopy(base_params)
                 for i, param_name in enumerate(param_names):
                     hparams[param_name] = combination[i]
+
+                # Reconstruct nested structure from flattened params
+                hparams = unflatten_params(hparams)
 
                 # Only create combo name if multiple parameters are being swept
                 if len(param_names) > 1:
@@ -62,6 +85,8 @@ def load_hparams(yaml_hparam_path, num_seeds=5, experiment_name=None):
     else:
         for seed in seeds:
             hparams = deepcopy(base_params)
+            # Reconstruct nested structure from flattened params
+            hparams = unflatten_params(hparams)
             method_name = hparams.get('method', 'unknown')
             env_name = hparams.get('env_name', 'unknown')
 
@@ -83,9 +108,26 @@ def reward_shaper(rewards, timestep, timesteps):
 
 
 def create_skrl_config(hparam):
+    from skrl.agents.torch.ppo import PPO_DEFAULT_CONFIG
     cfg = PPO_DEFAULT_CONFIG.copy()
-    cfg.update(hparam.get("ppo", {}))
-    cfg.update(hparam.get("trainer", {}))
+    
+    # Handle flattened parameters
+    ppo_params = {}
+    trainer_params = {}
+    for key, value in hparam.items():
+        if key.startswith("ppo."):
+            ppo_params[key[4:]] = value  # Remove "ppo." prefix
+        elif key.startswith("trainer."):
+            trainer_params[key[8:]] = value  # Remove "trainer." prefix
+    
+    # Also handle legacy nested format
+    if "ppo" in hparam:
+        ppo_params.update(hparam["ppo"])
+    if "trainer" in hparam:
+        trainer_params.update(hparam["trainer"])
+    
+    cfg.update(ppo_params)
+    cfg.update(trainer_params)
     cfg["rewards_shaper"] = reward_shaper  # CHANGE: Use function instead of lambda
     cfg["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.008}
     cfg["experiment"] = {
@@ -98,6 +140,7 @@ def create_skrl_config(hparam):
 
 
 def load_env(hparam, device):
+    from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
     env_setup = MujocoParser(**hparam)
     env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
     print(f"{env=}, {node_dim=}, {num_nodes=}")
@@ -126,6 +169,7 @@ def load_agent_and_env(hparam, device):
     env_idx = hparam['env_mapping'][hparam['env_name']]
     graph_info = hparam[f'graph_info_{env_idx}']
     edges = graph_info['edge_idx']
+    from torch_geometric.utils import degree
     in_degree = degree(edges[1], num_nodes=graph_info['num_nodes'])
     max_in = in_degree.max().item()
     actor = agent(in_dim=graph_info['num_nodes'],
@@ -140,6 +184,7 @@ def load_agent_and_env(hparam, device):
 
 
 def load_skrl_agent_and_env(hparam, device):
+    from src.agents import SKRLFeedForward, SkrlNerveNet, SkrlMethod1, SkrlMethod2
     env = load_env(hparam, device)
     method = hparam['method']
     if method == "method1":
