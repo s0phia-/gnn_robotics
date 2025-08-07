@@ -1,4 +1,4 @@
-from src.agents.function_approximators import *
+from src.agents.nerve_net import *
 from torch_geometric.utils import dense_to_sparse
 
 from GNN_Layers.EGAT import EGAT
@@ -22,6 +22,7 @@ class GAT_Method(MessagePassingGNN):
                                    heads=self.num_heads,
                                    negative_slope=self.negative_slope,
                                    dropout=self.dropout,
+                                   node_message=self.node_message,
                                    ).to(device))
             
     def forward(self, data):

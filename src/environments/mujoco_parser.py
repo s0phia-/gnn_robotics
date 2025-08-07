@@ -88,13 +88,14 @@ class MujocoParser:
             if not os.path.exists(os.path.join(self.env_dir, '{}.py'.format(env_name))):
                 # create a duplicate of gym environment file for each env (necessary for avoiding bug in gym)
                 copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
-            params = {'xml': os.path.abspath(xml)}
+            params = {'xml': os.path.abspath(xml),
+                      'idx': self.env_mapping[env_name]}
             # register with gym (check how it works)
 
             print(f"env registry params:")
             for k, v in params.items():
                 print(f"\t{k}: {v}")
-            
+
             register(id=("%s-v0" % env_name),
                      max_episode_steps=max_episode_steps,
                      entry_point="src.environments.%s:ModularEnv" % env_file,
@@ -230,11 +231,12 @@ def get_motor_joints(xml_file):
 
 class IdentityWrapper(gym.Wrapper):
     """wrapper with useful attributes and helper functions"""
+
     def __init__(self, env):
         super(IdentityWrapper, self).__init__(env)
         self.num_limbs = self.env.unwrapped.model.nbody - 1
-        self.limb_obs_size = self.env.unwrapped.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.unwrapped.action_space.high[0])
+        self.limb_obs_size = env.unwrapped.limb_obs_size
         print(f"{self.limb_obs_size=}")
         print(f"{self.max_action=}")
         print(f"{self.num_limbs=}")
@@ -244,10 +246,11 @@ class IdentityWrapper(gym.Wrapper):
 
 class ModularEnvWrapper(gym.Wrapper):
     """
-    generating the graph 
+    generating the graph
     Force env to return fixed shape obs when called .reset() and .step() and removes action's padding before execution
     Also match the order of the actions returned by modular policy to the order of the environment actions
     """
+
     def __init__(self, env, obs_max_len=None):
         super(ModularEnvWrapper, self).__init__(env)
         # if no max length specified for obs, use the current env's obs size
@@ -256,31 +259,40 @@ class ModularEnvWrapper(gym.Wrapper):
         else:
             self.obs_max_len = self.env.observation_space.shape[0]
         self.action_len = self.env.action_space.shape[0]
-        self.num_limbs = self.env.unwrapped.model.nbody-1
+        self.num_limbs = self.env.unwrapped.model.nbody - 1
         self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.action_space.high[0])
-        print(f"{self.obs_max_len=}")
-        print(f"{self.limb_obs_size=}")
-        print(f"{self.max_action=}")
 
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
+        self.edge_index = create_edges(self, torch.device('cpu'))
 
-    def step(self, action): # ordering introduced here
-        action = action[:self.num_limbs] # clip the 0-padding before processing
+    def step(self, action):  # ordering introduced here
+        action = action[:self.num_limbs]  # clip the 0-padding before processing
         obs, reward, terminated, truncated, info = self.env.step(action)
-        done = terminated or truncated
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        return obs, reward, done, False, info
+        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
+        terminated = torch.tensor([terminated], dtype=torch.bool).reshape(-1)
+        truncated = torch.tensor([truncated], dtype=torch.bool).reshape(-1)
+        reward = torch.tensor(reward, dtype=torch.float32).reshape(-1)
+        return obs, reward, terminated, truncated, info
 
-    def reset(self, seed=None):
-        obs = self.env.reset(seed=seed)[0]
+    def reset(self, seed=None, **kwargs):
+        """
+        Reset method that always returns (obs, info) tuple for consistency
+        """
+        if seed is not None:
+            obs, info = self.env.reset(seed=seed)
+        else:
+            obs, info = self.env.reset()
+
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        return obs
+        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
+        return obs, info
 
 
 def create_edges(env, device):

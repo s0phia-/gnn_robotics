@@ -1,7 +1,12 @@
-matplotlib==3.9.4
-networkx==3.4.2
-numpy==2.2.4
+gymnasium==1.0.0
+matplotlib==3.10.3
+networkx==3.3
+numpy==2.3.2
+PyYAML==6.0.1
 PyYAML==6.0.2
-gymnasium>=1.1.1
-torch==2.6.0
+skrl==1.4.3
+stable_baselines3==2.7.0
+tensorboard==2.19.0
+torch==2.5.1
+torch_geometric==2.6.1
 xmltodict==0.14.2

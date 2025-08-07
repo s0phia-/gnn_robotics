@@ -1,4 +1,4 @@
-from src.agents.function_approximators import MessagePassingGNN, Gnnlayer
+from src.agents.nerve_net import MessagePassingGNN, Gnnlayer
 import torch
 import torch.nn as nn
 from torch_geometric.utils import add_self_loops
@@ -9,12 +9,11 @@ class Method5Gnn(MessagePassingGNN):
                  in_dim: int,
                  num_nodes: int,
                  action_dim: int,
-                 mask: list,
                  device: torch.device,
                  max_neighbours: int,
                  **kwargs
                  ):
-        super().__init__(in_dim, num_nodes, action_dim, mask, device, **kwargs)
+        super().__init__(in_dim, num_nodes, action_dim, device, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(GnnLayerNoPooling(in_dim=self.hidden_node_dim,

@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 from time import sleep
-from src.agents.function_approximators import make_graph, make_graph_batch, FeedForward
+from src.agents import make_graph, make_graph_batch, FeedForward
 
 
 class PPO:
