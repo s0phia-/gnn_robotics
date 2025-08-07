@@ -22,6 +22,7 @@ class GAT_Method(MessagePassingGNN):
                                    heads=self.num_heads,
                                    negative_slope=self.negative_slope,
                                    dropout=self.dropout,
+                                   node_message=self.node_message,
                                    ).to(device))
             
     def forward(self, data):
