@@ -18,7 +18,7 @@ class EGAT(MessagePassing):
     """"
     Edge-Featured Graph Attention Network 
 
-    my implementation of the EGAT proposed in doi:10.1007/978-3-030-86362-2_21
+    my implementation of the EGAT proposed in doi:10.1007/978-3-030-86362-3_21
     
     """
     def __init__(self, 
@@ -116,7 +116,7 @@ class EGAT(MessagePassing):
 
         edge_out = self.edge_updater(edge_index, x=em_x, edge_attr=em_edge_attr)
 
-        return {'x': node_out, 'edge_attr': edge_out}
+        return {'x': node_out, 'edge_attr': edge_out, 'edge_index': edge_index}
     
     def message(self, x_i, x_j, index, edge_attr, ptr, size_i):  
         x_j = x_j.view(-1, self.heads, self.node_out_channels)  
