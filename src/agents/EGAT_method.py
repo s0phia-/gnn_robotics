@@ -49,6 +49,7 @@ class EGATMethod(MessagePassingGNN):
         edge_index_combined = torch.cat([edge_idx_morph, edge_idx_fc], dim=1)
 
         # todo: fix how the edges are combined
+
         edge_attr_morph_zero = torch.zeros(len(edge_index_morph[0]), 1, device=edge_index_morph.device)
         edge_attr_morph_one = torch.ones_like(edge_attr_morph_zero)
         edge_attr_morph = torch.cat([edge_attr_morph_zero, edge_attr_morph_one], dim=1)
