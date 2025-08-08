@@ -262,10 +262,8 @@ class ModularEnvWrapper(gym.Wrapper):
         self.num_limbs = self.env.unwrapped.model.nbody - 1
         self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.action_space.high[0])
-
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
-        self.edge_index = create_edges(self, torch.device('cpu'))
 
     def step(self, action):  # ordering introduced here
         action = action[:self.num_limbs]  # clip the 0-padding before processing
@@ -273,7 +271,6 @@ class ModularEnvWrapper(gym.Wrapper):
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
         terminated = torch.tensor([terminated], dtype=torch.bool).reshape(-1)
         truncated = torch.tensor([truncated], dtype=torch.bool).reshape(-1)
         reward = torch.tensor(reward, dtype=torch.float32).reshape(-1)
@@ -291,7 +288,6 @@ class ModularEnvWrapper(gym.Wrapper):
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
         return obs, info
 
 

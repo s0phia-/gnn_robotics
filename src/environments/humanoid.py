@@ -37,7 +37,7 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.reset()
         self.num_limbs = self.model.nbody - 1
         self.limb_obs_size = len(self._get_obs()) // self.num_limbs
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self.num_limbs * self.limb_obs_size + 1,),
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self.num_limbs * self.limb_obs_size,),
                                      dtype=np.float32)
 
     def step(self, a):
