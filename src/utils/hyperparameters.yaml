@@ -12,7 +12,7 @@ ppo:
   value_clip: 0.2
   learning_epochs:
     - 10
-    - 20
+#    - 20
   grad_norm_clip: 5
   kl_threshold: 0.1
   mini_batch_size: 64
@@ -25,23 +25,23 @@ trainer:
   checkpoint_interval: 1000
 
 method:
-  - method1
-  - method2
+#  - method1
+#  - method2
   - NerveNet
 #  - MLP
 propagation_steps:
   - 3
-  - 4
-  - 5
-  - 6
+#  - 4
+#  - 5
+#  - 6
 node_hidden_size:
   - 32
-  - 64
-  - 128
+#  - 64
+#  - 128
 network_shape:
   - [64,64]
-  - [128,128]
-  - [254, 254]
+#  - [128,128]
+#  - [254, 254]
 #  - [64, 64, 64]
 morphology_fc_ratio:
 #  - 0

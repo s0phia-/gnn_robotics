@@ -20,50 +20,44 @@ class Method2Gnn(MessagePassingGNN):
                                                  morph_weight=self.morphology_fc_ratio))
 
     def forward(self, data):
-        if isinstance(data, Data):  # if a pytorch geometric object
-            x, edge_index = data.x, data.edge_index
+        data = torch.tensor(data, dtype=torch.float, device=self.device)
+        if data.dim() == 1:  # single observation
+            data = self.make_graph(data)
+            x, edge_idx_morph, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
+            batch = None
+
+            edge_idx_fc, _ = dense_to_sparse(torch.ones(len(x), len(x), device=self.device))
+        else:  # Batch of observations
+            data = self.make_graph_batch(data)
+            x, edge_idx_morph, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
             batch = data.batch
-        else:  # assume np array or torch tensor
-            data = torch.tensor(data, dtype=torch.float, device=self.device)
-            if data.dim() == 1:  # single observation
-                data, mask = self.make_graph(data)
-                x, edge_morph = data.x, data.edge_index
-                batch = None
-            else:  # Batch of observations
-                data, mask = self.make_graph_batch(data)
-                x, edge_morph = data.x, data.edge_index
-                batch = data.batch
 
-        x = self.encoder(x=x)
-
-        if batch is None:
-            edge_fc, _ = dense_to_sparse(torch.ones(len(x), len(x), device=self.device))
-        else:
             batch_ids = torch.unique(batch)
             edges = []
             for batch_id in batch_ids:
                 nodes = torch.where(batch == batch_id)[0]
                 edges.append(torch.cartesian_prod(nodes, nodes).T)
-            edge_fc = torch.cat(edges, dim=1)
+            edge_idx_fc = torch.cat(edges, dim=1)
+
+        x = self.encoder(x=x)
 
         for i in range(self.propagation_steps):
-            x = self.middle[i](x=x, edge_morph=edge_morph, edge_fc=edge_fc)
+            x = self.middle[i](x=x, edge_morph=edge_idx_morph, edge_fc=edge_idx_fc)
 
         x = self.decoder(x=x)
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        x = x.view(-1, self.num_nodes)
-        x = x.squeeze(0)
-
         if batch is not None:
+            x = x[mask]
             batch_size = batch.max().item() + 1
-            x = x.view(batch_size, self.num_nodes)
-            x = x[:, mask]
+            x = x.view(batch_size, -1)
             return x
 
         else:
+            x = x.view(-1, self.num_nodes)
+            x = x.squeeze(0)
             x = x[mask]
             return x
 
