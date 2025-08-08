@@ -5,6 +5,7 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
 from torch_geometric.data import Data, Batch
 from skrl.models.torch import Model, GaussianMixin, DeterministicMixin
+from collections import namedtuple
 
 
 class Encoder(nn.Module):
@@ -104,7 +105,6 @@ class Decoder(nn.Module):
 class MessagePassingGNN(nn.Module):
     def __init__(self,
                  in_dim: int,
-                 num_nodes: int,
                  action_dim: int,
                  device: torch.device,
                  **kwargs
@@ -117,7 +117,6 @@ class MessagePassingGNN(nn.Module):
         """
         nn.Module.__init__(self)
         self.__dict__.update((k, v) for k, v in kwargs.items())
-        self.num_nodes = num_nodes
         self.node_feature_dim = in_dim
         self.device = device
 
@@ -150,22 +149,14 @@ class MessagePassingGNN(nn.Module):
 
         x = obs.view(num_nodes, -1)
         mask = torch.tensor(actuator_mask, dtype=torch.bool)
-        return Data(x=x, edge_index=edge_idx), mask
+        return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes)
 
     def make_graph_batch(self, obs_batch):
-        env_idx = int(obs_batch[0][-1])
-        graph_data = getattr(self, f"graph_info_{env_idx}", None)
-        num_nodes = graph_data['num_nodes']
-        edge_idx = graph_data['edge_idx']
-        actuator_mask = graph_data['actuator_mask']
-
         data_list = []
         for obs in obs_batch:
-            obs = obs[:-1]
-            x = obs.view(num_nodes, -1)
-            graph = Data(x=x, edge_index=edge_idx)
+            graph = self.make_graph(obs)
             data_list.append(graph)
-        return Batch.from_data_list(data_list), actuator_mask
+        return Batch.from_data_list(data_list)
 
     def forward(self, data):
         if isinstance(data, Data):  # if a pytorch geometric object
@@ -174,12 +165,12 @@ class MessagePassingGNN(nn.Module):
         else:  # assume np array or torch tensor
             data = torch.tensor(data, dtype=torch.float, device=self.device)
             if data.dim() == 1:  # single observation
-                data, mask = self.make_graph(data)
-                x, edge_index = data.x, data.edge_index
+                data = self.make_graph(data)
+                x, edge_index, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
                 batch = None
             else:  # Batch of observations
-                data, mask = self.make_graph_batch(data)
-                x, edge_index = data.x, data.edge_index
+                data = self.make_graph_batch(data)
+                x, edge_index, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
                 batch = data.batch
 
         x = self.encoder(x=x)
@@ -192,16 +183,15 @@ class MessagePassingGNN(nn.Module):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        x = x.view(-1, self.num_nodes)
-        x = x.squeeze(0)
-
         if batch is not None:
+            x = x[mask]
             batch_size = batch.max().item() + 1
-            x = x.view(batch_size, self.num_nodes)
-            x = x[:, mask]
+            x = x.view(batch_size, -1)
             return x
 
         else:
+            x = x.view(-1, self.num_nodes)
+            x = x.squeeze(0)
             x = x[mask]
             return x
 
@@ -210,7 +200,7 @@ class SkrlNerveNet(GaussianMixin, DeterministicMixin, Model):
     def __init__(self,
                  observation_space,
                  action_space,
-                 num_nodes,
+                 node_dim,
                  device,
                  clip_actions=False,
                  clip_log_std=True,
@@ -222,11 +212,7 @@ class SkrlNerveNet(GaussianMixin, DeterministicMixin, Model):
         GaussianMixin.__init__(self, clip_actions, clip_log_std, min_log_std, max_log_std, reduction)
         DeterministicMixin.__init__(self, clip_actions)
 
-        total_dim = observation_space.shape[0] - 1
-        per_node_dim = total_dim // num_nodes
-
-        self.policy_network = MessagePassingGNN(in_dim=per_node_dim,
-                                                num_nodes=num_nodes,
+        self.policy_network = MessagePassingGNN(in_dim=node_dim,
                                                 action_dim=1,
                                                 device=device,
                                                 ** {k: v for k, v in kwargs.items() if k not in
