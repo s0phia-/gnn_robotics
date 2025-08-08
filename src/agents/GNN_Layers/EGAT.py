@@ -148,7 +148,9 @@ class EGAT(MessagePassing):
         edge_attr = self.edge_update_mlp(edge_info_combined)  # apply edge update MLP
         return edge_attr
 
+
 import matplotlib.pyplot as plt
+
 
 def visualize_graph_and_output(graph, output, title="Graph Visualization"):
     # Create a NetworkX graph from the edge index
@@ -157,7 +159,6 @@ def visualize_graph_and_output(graph, output, title="Graph Visualization"):
     for i in range(edge_index.shape[1]):
         print(f"Edge {i}: {output['edge_attr'][i].detach().numpy()}")
         nx_graph.add_edge(edge_index[0, i], edge_index[1, i], weight=output['edge_attr'][i][0].item())
-
 
     # Get node positions
     pos = nx.spring_layout(nx_graph, seed=42)
@@ -170,42 +171,9 @@ def visualize_graph_and_output(graph, output, title="Graph Visualization"):
     edge_labels = nx.get_edge_attributes(nx_graph, 'weight')
     nx.draw_networkx_edge_labels(nx_graph, pos, edge_labels={k: f"{v:.2f}" for k, v in edge_labels.items()}, font_color='black')
 
-
     # Add node embeddings as labels
     for i, (x, y) in pos.items():
         plt.text(x, y + 0.1, f"{output['x'][i].detach().numpy()}", fontsize=8, ha="center", color="red")
 
     plt.title(title)
     plt.show()
-
-# Example usage
-if __name__ == "__main__":
-    # Create a simple graph
-    edge_index = torch.tensor([[0, 1, 1, 2],
-                               [1, 0, 2, 0]], dtype=torch.long)  # Edges in COO format
-    x = torch.tensor([[0, 1], [1, 1], [2, 1]], dtype=torch.float)  # Node features
-    # Add edge weights
-    edge_weight = torch.tensor([[0.5, 0.2,0.6], [0.8, 0.1,0.5], [0.3, 0.7,0.6], [0.9, 0.4,0.3]], dtype=torch.float)  # Example edge weights
-    # Create a PyTorch Geometric Data object
-    data = Data(x=x, edge_index=edge_index, edge_attr=edge_weight)
-
-    # Instantiate the EGAT model
-    node_in_channels = x.size(1)
-    edge_in_channels = edge_weight.size(1)
-
-    node_out_channels = 4
-    edge_out_channels = 4
-    heads = 2
-    gat = EGAT_tunedContribution(node_in_channels,
-                                 node_out_channels,
-                                 edge_in_channels,
-                                 edge_out_channels,
-                                 heads=heads)
-
-    # Forward pass
-    out = gat(data.x, data.edge_index,data.edge_attr)
-    print("Output node embeddings:")
-    print(out)
-
-    visualize_graph_and_output(data, out, title="EGAT Output Visualization")
-# %%
