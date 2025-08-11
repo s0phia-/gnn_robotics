@@ -53,15 +53,10 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
 
 
 def load_env(hparam, device):
-    from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
+    from src.environments.mujoco_parser import MujocoParser
     env_setup = MujocoParser(**hparam)
     env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
     print(f"{env=}, {node_dim=}, {num_nodes=}")
-    edges = create_edges(env, device)
-    actuator_mask = check_actuators(env)
-    env.num_nodes = num_nodes
-    env.edge_idx = edges
-    env.mask = actuator_mask
     env.reset()
     return env
 
@@ -80,7 +75,7 @@ def load_agent_and_env(hparam, device):
     actor = agent(device=device,
                   **hparam)
     critic = agent(device=device,
-                  **hparam)
+                   **hparam)
     return actor, critic, env
 
 
