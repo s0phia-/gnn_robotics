@@ -19,15 +19,16 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         print(f"HERE: self.metadata: {self.metadata}")
         self.xml = xml
         self.num_nodes, self.edge_idx, self.mask = None, None, None
+
         render_mode = kwargs.get('render_mode', None)
         self._desired_render_mode = render_mode
         print(f"{self.xml=}")
-        # get from _get_obs
         mujoco_env.MujocoEnv.__init__(self, model_path=xml,
                                       frame_skip=4,
                                       observation_space=None,
                                       render_mode=None, )
         utils.EzPickle.__init__(self)
+
         if seed is not None:
             self.reset(seed=seed)
         else:
@@ -55,7 +56,7 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             reward = float(reward.item())
         else:
             reward = float(reward)
-        return ob, reward, terminated, truncated, {self.num_nodes, self.edge_idx, self.mask}
+        return ob, reward, terminated, truncated, self._get_reset_info()
 
     def _get_obs(self):
         """
@@ -108,10 +109,7 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.init_qpos + self.np_random.uniform(low=-.005, high=.005, size=self.model.nq),
             self.init_qvel + self.np_random.uniform(low=-.005, high=.005, size=self.model.nv)
         )
-        return self._get_obs(),
-
-    def _get_reset_info(self):
-        return {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask}
+        return self._get_obs()
 
     def render(self):
         if hasattr(self, 'mujoco_renderer'):

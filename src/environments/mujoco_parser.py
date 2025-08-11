@@ -40,7 +40,7 @@ class MujocoParser:
 
         # create vectorized training env
         obs_max_len = max([len(self.morph_graphs[env_name]) for env_name in envs_train_names]) * self.limb_obs_size
-        self.envs_train = [self.make_env_wrapper(name, obs_max_len, self.seed) for name in envs_train_names]
+        self.envs_train = [self.make_env_wrapper(name, obs_max_len, self.seed, self.num_nodes) for name in envs_train_names]
 
         # self.envs_train = DummyVecEnv(envs_train)  # vectorized env (necessary for multiprocessing)
 
@@ -115,11 +115,11 @@ class MujocoParser:
         return max_children
 
     @staticmethod
-    def make_env_wrapper(env_name, obs_max_len=None, seed=0):
+    def make_env_wrapper(env_name, obs_max_len=None, seed=0, num_nodes=None):
         """return wrapped gym environment for parallel sample collection (vectorized environments)"""
         e = gym.make("src.environments:%s-v0" % env_name, seed=seed, render_mode='human')
         e.reset()
-        e = ModularEnvWrapper(e, obs_max_len)
+        e = ModularEnvWrapper(e, obs_max_len, num_nodes)
         return e
 
 
@@ -250,7 +250,7 @@ class ModularEnvWrapper(gym.Wrapper):
     Also match the order of the actions returned by modular policy to the order of the environment actions
     """
 
-    def __init__(self, env, obs_max_len=None):
+    def __init__(self, env, obs_max_len=None, num_nodes=None):
         super(ModularEnvWrapper, self).__init__(env)
         # if no max length specified for obs, use the current env's obs size
         if obs_max_len:
@@ -263,6 +263,9 @@ class ModularEnvWrapper(gym.Wrapper):
         self.max_action = float(self.env.action_space.high[0])
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
+        self.num_nodes = num_nodes
+        self.edge_idx = create_edges(env)
+        self.mask = check_actuators(env)
 
     def step(self, action):  # ordering introduced here
         action = action[:self.num_limbs]  # clip the 0-padding before processing
@@ -273,6 +276,7 @@ class ModularEnvWrapper(gym.Wrapper):
         terminated = torch.tensor([terminated], dtype=torch.bool).reshape(-1)
         truncated = torch.tensor([truncated], dtype=torch.bool).reshape(-1)
         reward = torch.tensor(reward, dtype=torch.float32).reshape(-1)
+        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask}
         return obs, reward, terminated, truncated, info
 
     def reset(self, seed=None, **kwargs):
@@ -283,24 +287,21 @@ class ModularEnvWrapper(gym.Wrapper):
             obs, info = self.env.reset(seed=seed)
         else:
             obs, info = self.env.reset()
-
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
+        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask}
         return obs, info
 
 
-def create_edges(env, device):
+def create_edges(env):
     parent_list = get_graph_structure(env.unwrapped.xml)
     edges = []
     for i, j in enumerate(parent_list):
         if j != -1:
             edges.append([i, j])
             edges.append([j, i])
-    if edges:
-        return torch.tensor(edges, dtype=torch.long, device=device).t()
-    else:
-        return torch.zeros((2, 0), dtype=torch.long, device=device)
+    return edges
 
 
 def check_actuators(env):
