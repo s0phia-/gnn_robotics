@@ -23,7 +23,7 @@ class EGATMethod(MessagePassingGNN):
                                     dropout=self.dropout,
                                     ).to(device))
 
-    def forward(self, data):
+    def forward(self, data: Data ):
         data = torch.tensor(data, dtype=torch.float, device=self.device)
         if data.dim() == 1:  # single observation
             data = self.make_graph(data)
