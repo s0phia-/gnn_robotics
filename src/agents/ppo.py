@@ -15,7 +15,7 @@ class PPO:
     Schulman, John, et al. "Proximal policy optimization algorithms."
     """
 
-    def __init__(self, actor, device, env, **kwargs):
+    def __init__(self, actor, critic, device, env, **kwargs):
         # extract parameters
         self.__dict__.update((k, v) for k, v in kwargs.items())
 
@@ -25,11 +25,10 @@ class PPO:
         # set up environment
         self.env = env
         self.device = device
-        self.obs_dim = self.env.observation_space.shape[0]
 
         # initialise actor and critic networks
         self.actor = actor
-        self.critic = FeedForward(self.obs_dim, 1, device)  # todo
+        self.critic = critic
 
         # initialise optimiser for actor and critic
         self.actor_optim = Adam(self.actor.parameters(), lr=float(self.lr))
@@ -124,21 +123,21 @@ class PPO:
             obs, info = self.env.reset()
             for ep_t in range(self.max_episodic_timesteps):
                 t += 1
-                graph = create_graph(obs, info)
+                graph = self.make_graph(obs, info)
                 batch_observations.append(graph)
                 obs_tensor = torch.tensor(obs, dtype=torch.float32, device=self.device)
                 action, log_prob = self.get_action(obs_tensor, calculate_log_probs=True)
                 obs, reward, terminated, truncated, info = self.env.step(action)
                 batch_actions.append(action)
-                batch_log_probs.append(log_prob.cpu().item())  # If log_prob is a scalar tensor
+                batch_log_probs.append(log_prob.cpu().item())
                 episode_rewards.append(reward)
                 if terminated or truncated:
-                    graph = create_graph(obs, info)
+                    graph = self.make_graph(obs, info)
                     batch_observations.append(graph)
                     break
             batch_lens.append(len(episode_rewards))
             batch_rewards.append(episode_rewards)
-        # batch_observations = torch.tensor(np.array(batch_observations), dtype=torch.float, device=self.device)
+        batch_observations = self.make_graph_batch(batch_observations)
         batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float, device=self.device)
         batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float, device=self.device)
         batch_rewards_to_gos = self.get_reward_to_go(batch_rewards)
@@ -152,8 +151,7 @@ class PPO:
         :return: action, log probability of action (optional)
         """
         self.num_nodes = obs.shape[0]
-        graph = make_graph(obs, self.graph_info['num_nodes'], edge_index=self.graph_info['edge_idx'])
-        mean_action = self.actor(graph)
+        mean_action = self.actor(obs)
         dist = MultivariateNormal(mean_action, self.cov_mat(len(mean_action)))
         action = dist.sample()
         log_prob = dist.log_prob(action)
@@ -192,28 +190,24 @@ class PPO:
         :param actions: actions to calculate log probability for
         :return: log probabilities of actions
         """
-        graph_batch = self.make_graph_batch(obs,
-                                            num_nodes=self.graph_info['num_nodes'],
-                                            edge_index=self.graph_info['edge_idx'],
-                                            mask=self.graph_info['mask'])
-        batch_action = self.actor(graph_batch)
+        batch_action = self.actor(obs)
         dist = MultivariateNormal(batch_action, self.cov_mat(len(batch_action[0])))
         log_probs = dist.log_prob(actions)
 
         return log_probs
 
-    def make_graph(self, obs, num_nodes, edge_idx, mask):
+    @staticmethod
+    def make_graph(obs, info):
+        print(info)
+        num_nodes, edge_idx, mask = info
         node_dim = obs / num_nodes
         x = obs.view(num_nodes, -1)
         mask = torch.tensor(mask, dtype=torch.bool)
         return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
 
-    def make_graph_batch(self, obs_batch, num_nodes, edge_idx, mask):
-        data_list = []
-        for i, obs in enumerate(obs_batch):
-            graph = self.make_graph(obs, num_nodes[i], edge_idx[i], mask[i])
-            data_list.append(graph)
-        return Batch.from_data_list(data_list)
+    @staticmethod
+    def make_graph_batch(obs_batch):
+        return Batch.from_data_list(obs_batch)
 
     def load_actor(self, actor_path, device):
         self.actor.load_state_dict(torch.load(actor_path, map_location=device))
