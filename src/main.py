@@ -14,7 +14,6 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
 if __name__ == '__main__':
-    import torch
     from src.utils import load_hparams
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=3)
