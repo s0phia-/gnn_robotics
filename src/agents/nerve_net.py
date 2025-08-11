@@ -22,7 +22,10 @@ class Encoder(nn.Module):
 
     def _get_layer(self, in_dim: int):
         if in_dim not in self._layers:
-            self._layers[in_dim] = [nn.Linear(in_dim, self.hidden_dim, device=self.device), nn.Tanh()]
+            layer = nn.Linear(in_dim, self.hidden_dim, device=self.device)
+            for param in layer.parameters():
+                param.requires_grad = False
+            self._layers[in_dim] = [layer, nn.Tanh()]
         return self._layers[in_dim]
 
     def forward(self, x: torch.Tensor, in_dim: int) -> torch.Tensor:
@@ -81,38 +84,29 @@ class Gnnlayer(MessagePassing):
 class Decoder(nn.Module):
     def __init__(self,
                  in_dim: int,
+                 out_dim: int,
                  hidden_shape: list,
                  device: torch.device):
         """
         A decoder network, part four of the NerveNet Message Passing GNN architecture.
         :param in_dim:
+        :param out_dim:
         :param hidden_shape:
         :param device:
         """
         super().__init__()
-        self.in_dim = in_dim
-        self.hidden_shape = hidden_shape
-        self.device = device
 
-        self.base_layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
+        self.layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
         for i in range(len(hidden_shape) - 1):
-            self.base_layers.append(nn.Linear(hidden_shape[i], hidden_shape[i + 1], device=device))
-            self.base_layers.append(nn.Tanh())
-        self.base_layers = nn.Sequential(*self.base_layers)
-        self._output_layers = {}
+            self.layers.append(nn.Linear(hidden_shape[i], hidden_shape[i + 1], device=device))
+            self.layers.append(nn.Tanh())
+        self.layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
+        self.layers = nn.Sequential(*self.layers)
 
-    def _get_output_layer(self, out_dim: int):
-        """Get or create output layer for given output dimension"""
-        if out_dim not in self._output_layers:
-            self._output_layers[out_dim] = nn.Linear(self.hidden_shape[-1], out_dim, device=self.device)
-        return self._output_layers[out_dim]
-
-    def forward(self, x: torch.Tensor, out_dim: int):
+    def forward(self, x: torch.Tensor):
         if isinstance(x, np.ndarray):
-            x = torch.tensor(x, dtype=torch.float, device=self.device)
-        x = self.base_layers(x)
-        output_layer = self._get_output_layer(out_dim)
-        return output_layer(x)
+            x = torch.tensor(x, dtype=torch.float)
+        return self.layers(x)
 
 
 class MessagePassingGNN(nn.Module):
@@ -140,6 +134,7 @@ class MessagePassingGNN(nn.Module):
                                         device=device))
 
         self.decoder = Decoder(in_dim=self.node_hidden_size,
+                               out_dim=1,
                                hidden_shape=self.network_shape,
                                device=device).to(device)
 
