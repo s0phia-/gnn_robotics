@@ -46,20 +46,18 @@ class EGATMethod(MessagePassingGNN):
 
         x = self.encoder(x=x)
 
-        edge_index_combined = torch.cat([edge_idx_morph, edge_idx_fc], dim=1)
+        edge_attr_combined = torch.zeros(len(edge_idx_fc[0]),2)
+        edge_attr_combined[:,-1]=1
 
-        # todo: fix how the edges are combined
+        for idx_morf, src_morf in enumerate(edge_idx_morph[0]):
+            for idx_fc, src_fc in enumerate(edge_idx_fc[0]):
+                if src_morf == src_fc:
+                    if edge_idx_morph[1][idx_morf] == edge_idx_fc[1][idx_fc]:
+                        edge_attr_combined[idx_fc, 0] = 1
+                        break 
 
-        edge_attr_morph_zero = torch.zeros(len(edge_index_morph[0]), 1, device=edge_index_morph.device)
-        edge_attr_morph_one = torch.ones_like(edge_attr_morph_zero)
-        edge_attr_morph = torch.cat([edge_attr_morph_zero, edge_attr_morph_one], dim=1)
-
-        edge_attr_fc_zero = torch.zeros(edge_index_fc.shape[0], 1, device=edge_index_morph.device)
-        edge_attr_fc_one = torch.ones_like(edge_attr_fc_zero)
-        edge_attr_fc = torch.cat([edge_attr_fc_zero, edge_attr_fc_one], dim=1)
-
-        edge_attr_combined = torch.cat([edge_attr_morph, edge_attr_fc], dim=0)
-
+        edge_index_combined = edge_idx_fc
+        
         out = {'x': x, 'edge_attr': edge_attr_combined, 'edge_index': edge_index_combined}
 
         for i in range(self.propagation_steps - 1):
