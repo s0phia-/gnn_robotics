@@ -112,7 +112,7 @@ class EGAT(MessagePassing):
         em_src_x = self.em_src_lin(x)  
         em_dst_x = self.em_dst_lin(x)
         em_x = (em_src_x, em_dst_x)
-        em_edge_attr = self.nm_edge_lin(edge_attr)  # Reuse the same edge transformation
+        em_edge_attr = self.nm_edge_lin(edge_attr)
 
         edge_out = self.edge_updater(edge_index, x=em_x, edge_attr=em_edge_attr)
 
