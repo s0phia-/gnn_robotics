@@ -1,5 +1,4 @@
 from src.agents.method2 import Method2Gnn
-from skrl.models.torch import Model, GaussianMixin, DeterministicMixin
 from src.agents.nerve_net import Gnnlayer, add_self_loops
 from torch_geometric.utils import scatter
 import torch
@@ -85,40 +84,3 @@ class GnnLayerDoubleMessage(Gnnlayer):
             return self.message_function_type1(msg) * self.morph_weight
         if edge_type == 2:  # FC
             return self.message_function_type2(msg) * (1 - self.morph_weight)
-
-
-class SkrlMethod1(GaussianMixin, DeterministicMixin, Model):
-    def __init__(self,
-                 observation_space,
-                 action_space,
-                 num_nodes,
-                 device,
-                 clip_actions=False,
-                 clip_log_std=True,
-                 min_log_std=-20,
-                 max_log_std=2,
-                 reduction="sum",
-                 **kwargs):
-        Model.__init__(self, observation_space, action_space, device)
-        GaussianMixin.__init__(self, clip_actions, clip_log_std, min_log_std, max_log_std, reduction)
-        DeterministicMixin.__init__(self, clip_actions)
-
-        total_dim = observation_space.shape[0] - 1
-        per_node_dim = total_dim // num_nodes
-
-        self.policy_network = Method1Gnn(in_dim=per_node_dim,
-                                         action_dim=1,
-                                         num_nodes=num_nodes,
-                                         device=device,
-                                         **{k: v for k, v in kwargs.items() if k not in
-                                            ['in_dim', 'num_nodes', 'mask']}, )
-        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions))
-
-    def act(self, inputs, role):
-        if role == "policy":
-            return GaussianMixin.act(self, inputs, role)
-
-    def compute(self, inputs, role):
-        inputs = inputs["states"]
-        if role == "policy":
-            return self.policy_network(inputs), self.log_std_parameter, {}
