@@ -73,8 +73,10 @@ def load_agent_and_env(hparam, device):
     else:
         raise ValueError(f"Method {method} not implemented")
     actor = agent(device=device,
+                  network_type='actor',
                   **hparam)
     critic = agent(device=device,
+                   network_type='critic',
                    **hparam)
     return actor, critic, env
 

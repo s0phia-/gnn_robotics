@@ -29,8 +29,6 @@ class Encoder(nn.Module):
         return self._layers[in_dim]
 
     def forward(self, x: torch.Tensor, in_dim: int) -> torch.Tensor:
-        if isinstance(x, np.ndarray):
-            x = torch.tensor(x, dtype=torch.float)
         layers = self._get_layer(in_dim)
         layers = nn.Sequential(*layers)
         return layers(x)
@@ -86,7 +84,8 @@ class Decoder(nn.Module):
                  in_dim: int,
                  out_dim: int,
                  hidden_shape: list,
-                 device: torch.device):
+                 device: torch.device,
+                 network_type: str = 'actor'):
         """
         A decoder network, part four of the NerveNet Message Passing GNN architecture.
         :param in_dim:
@@ -95,23 +94,42 @@ class Decoder(nn.Module):
         :param device:
         """
         super().__init__()
+        self.network_type = network_type
+        self.actor_layers = self._build_mlp(in_dim, hidden_shape, out_dim, device)
+        self.critic_layers = self._build_mlp(in_dim, hidden_shape, 1, device)
 
-        self.layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
+    @staticmethod
+    def _build_mlp(in_dim, hidden_shape, out_dim, device):
+        layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
         for i in range(len(hidden_shape) - 1):
-            self.layers.append(nn.Linear(hidden_shape[i], hidden_shape[i + 1], device=device))
-            self.layers.append(nn.Tanh())
-        self.layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
-        self.layers = nn.Sequential(*self.layers)
+            layers.append(nn.Linear(hidden_shape[i], hidden_shape[i+1], device=device))
+            layers.append(nn.Tanh())
+        layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
+        return nn.Sequential(*layers)
 
-    def forward(self, x: torch.Tensor):
-        if isinstance(x, np.ndarray):
-            x = torch.tensor(x, dtype=torch.float)
-        return self.layers(x)
+    def forward(self, x: torch.Tensor, mask, batch=None, batch_size=1):
+        if self.network_type == 'actor':
+            self.forward_actor(self.actor_layers, x, batch_size=batch_size, mask=mask)
+        else:
+            self.forward_critic(self.actor_layers, x, batch=batch)
 
+    def forward_actor(self, x: torch.Tensor, batch_size=1, mask=mask):
+        x = self.actor_layers(x)
+        x = x[mask]
+        x = x.view(batch_size, -1)
+        return x
+
+    def forward_critic(self, x: torch.Tensor, batch=None):
+        output = self.critic_layers(x)
+        if batch is None:
+            return output.mean(dim=0)
+        else:
+            return torch.scatter_mean(output, batch, dim=0)
 
 class MessagePassingGNN(nn.Module):
     def __init__(self,
                  device: torch.device,
+                 network_type: str,
                  **kwargs
                  ):
         """
@@ -136,27 +154,29 @@ class MessagePassingGNN(nn.Module):
         self.decoder = Decoder(in_dim=self.node_hidden_size,
                                out_dim=1,
                                hidden_shape=self.network_shape,
+                               network_type=network_type,
                                device=device).to(device)
 
-    def forward(self, data: Data):
+    def forward(self, data: Data, network_type: str = 'actor'):
         x, edge_index, mask, num_nodes, batch, node_dim = (data.x, data.edge_index, data.mask, data.num_nodes,
                                                            data.batch, data.node_dim)
-        x = self.encoder(x=x, in_dim=node_dim)
-        for i in range(self.propagation_steps):
-            x = self.middle[i](x=x, edge_index=edge_index)
-        x = self.decoder(x=x, out_dim=num_nodes)
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        if batch is not None:
-            x = x[mask]
-            batch_size = batch.max().item() + 1
-            x = x.view(batch_size, -1)
+        if batch is None:  # not a batch
+            x = self.encoder(x=x, in_dim=node_dim)
+            for i in range(self.propagation_steps):
+                x = self.middle[i](x=x, edge_index=edge_index)
+            x = self.decoder(x=x)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             return x
 
-        else:
-            x = x.view(-1, self.num_nodes)
-            x = x.squeeze(0)
-            x = x[mask]
+        else:  # a batch
+            batch_size = batch.max().item() + 1
+            x = self.encoder(x, node_dim[0].item())
+            print(175, x.shape)
+            for i in range(self.propagation_steps):
+                x = self.middle[i](x=x, edge_index=edge_index)
+            x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
+            print(179, x.shape)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             return x

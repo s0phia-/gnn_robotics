@@ -35,7 +35,7 @@ class PPO:
         self.critic_optim = Adam(self.critic.parameters(), lr=float(self.lr))
 
         # create covariance matrix depending on action size
-        self.cov_mat = lambda x: np.eye(x, device=self.device) * 0.5
+        self.cov_mat = lambda x: torch.eye(x, device=self.device) * 0.5
 
         # set up file paths
         self.results_dir = f"{self.run_dir}/results/"
@@ -125,8 +125,7 @@ class PPO:
                 t += 1
                 graph = self.make_graph(obs, info)
                 batch_observations.append(graph)
-                obs_tensor = torch.tensor(obs, dtype=torch.float32, device=self.device)
-                action, log_prob = self.get_action(obs_tensor, calculate_log_probs=True)
+                action, log_prob = self.get_action(graph, calculate_log_probs=True)
                 obs, reward, terminated, truncated, info = self.env.step(action)
                 batch_actions.append(action)
                 batch_log_probs.append(log_prob.cpu().item())
@@ -150,7 +149,6 @@ class PPO:
         :param obs:observation to get action for
         :return: action, log probability of action (optional)
         """
-        self.num_nodes = obs.shape[0]
         mean_action = self.actor(obs)
         dist = MultivariateNormal(mean_action, self.cov_mat(len(mean_action)))
         action = dist.sample()
@@ -193,16 +191,15 @@ class PPO:
         batch_action = self.actor(obs)
         dist = MultivariateNormal(batch_action, self.cov_mat(len(batch_action[0])))
         log_probs = dist.log_prob(actions)
-
         return log_probs
 
-    @staticmethod
-    def make_graph(obs, info):
-        print(info)
-        num_nodes, edge_idx, mask = info
-        node_dim = obs / num_nodes
+    def make_graph(self, obs, info):
+        num_nodes, edge_idx, mask = info['num_nodes'], info['edge_idx'], info['mask']
+        node_dim = int(len(obs) / num_nodes)
+        obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
         x = obs.view(num_nodes, -1)
-        mask = torch.tensor(mask, dtype=torch.bool)
+        mask = torch.tensor(mask, dtype=torch.bool, device=self.device)
+        edge_idx = torch.tensor(edge_idx, device=self.device)
         return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
 
     @staticmethod

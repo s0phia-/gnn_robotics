@@ -301,7 +301,10 @@ def create_edges(env):
         if j != -1:
             edges.append([i, j])
             edges.append([j, i])
-    return edges
+    if edges:
+        return torch.tensor(edges, dtype=torch.long).t()
+    else:
+        return torch.zeros((2, 0), dtype=torch.long)
 
 
 def check_actuators(env):

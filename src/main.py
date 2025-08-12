@@ -16,7 +16,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 if __name__ == '__main__':
     from src.utils import load_hparams
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=3)
+    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=1)
     # if torch.cuda.is_available():  # GPU
     #     mp.set_start_method('spawn', force=True)
     #     mp.set_sharing_strategy('file_system')
