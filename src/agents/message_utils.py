@@ -279,71 +279,72 @@ class NN_Conv_diff(nn.Module):
     def forward(self, x_i, x_j, edge_attr=None):
         diff = x_i - x_j
         return self.mlp(diff)
-    
-class message_pass(nn.Module):
-    def __init__(self,message,                 
+
+
+class MessagePass(nn.Module):
+    def __init__(self, message,
                  node_in_channels,
                  node_out_channels,
-                 edge_in_channels = 0,
-                 edge_out_channels = 0,
+                 edge_in_channels=0,
+                 edge_out_channels=0,
                  **kwargs):
-        super(message_pass, self).__init__()
+        super(MessagePass, self).__init__()
 
         if message == 'x_j':
             self.message_fn = x_j(node_in_channels,
-                             node_out_channels,
-                             edge_in_channels,
-                             edge_out_channels)
-            
+                                  node_out_channels,
+                                  edge_in_channels,
+                                  edge_out_channels)
+
         elif message == 'NN(x_j||x_i)':
             self.message_fn = NN_concat_xj_xi(node_in_channels,
-                                  node_out_channels,
-                                  edge_in_channels,
-                                  edge_out_channels,
-                                  **kwargs)
-            
+                                              node_out_channels,
+                                              edge_in_channels,
+                                              edge_out_channels,
+                                              **kwargs)
+
         elif message == 'NN(x_j||x_i||e_ij)':
             self.message_fn = NN_concat_xj_xi_eij(node_in_channels,
-                                  node_out_channels,
-                                  edge_in_channels,
-                                  edge_out_channels,
-                                  **kwargs)
-            
+                                                  node_out_channels,
+                                                  edge_in_channels,
+                                                  edge_out_channels,
+                                                  **kwargs)
+
         elif message == 'x_i - x_j':
             self.message_fn = node_diff(node_in_channels,
-                                  node_out_channels,
-                                  edge_in_channels,
-                                  edge_out_channels,
-                                  **kwargs)
-            
+                                        node_out_channels,
+                                        edge_in_channels,
+                                        edge_out_channels,
+                                        **kwargs)
+
         elif message == 'W_eij(x_j)':
             raise TypeError('W_eij(x_j) is not supported in message passing, needs the W_eij to be implemented')
             self.message_fn = E_NN_Conv(node_in_channels,
-                                  node_out_channels,
-                                  edge_in_channels,
-                                  edge_out_channels,
-                                  **kwargs)
-            
+                                        node_out_channels,
+                                        edge_in_channels,
+                                        edge_out_channels,
+                                        **kwargs)
+
         elif message == 'W_eij(x_i - x_j)':
             raise TypeError('W_eij(x_j) is not supported in message passing, needs the W_eij to be implemented')
             self.message_fn = E_NN_Conv_diff(node_in_channels,
-                                  node_out_channels,
-                                  edge_in_channels,
-                                  edge_out_channels,
-                                  **kwargs)  
+                                             node_out_channels,
+                                             edge_in_channels,
+                                             edge_out_channels,
+                                             **kwargs)
         elif message == 'NN(x_j)':
             self.message_fn = NN_Conv(node_in_channels,
-                                  node_out_channels,
-                                  edge_in_channels,
-                                  edge_out_channels,
-                                  **kwargs)
+                                      node_out_channels,
+                                      edge_in_channels,
+                                      edge_out_channels,
+                                      **kwargs)
         elif message == 'NN(x_i - x_j)':
             self.message_fn = NN_Conv_diff(node_in_channels,
-                                  node_out_channels,
-                                  edge_in_channels,
-                                  edge_out_channels,
-                                  **kwargs)
-        
-    def forward(self,x_i, x_j,edge_attr = None):
-        return self.message_fn(x_i, x_j,edge_attr)
+                                           node_out_channels,
+                                           edge_in_channels,
+                                           edge_out_channels,
+                                           **kwargs)
+
+    def forward(self, x_i, x_j, edge_attr=None):
+        return self.message_fn(x_i, x_j, edge_attr)
         
