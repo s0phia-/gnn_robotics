@@ -1,5 +1,5 @@
 import torch
-import numpy as np
+from torch_scatter import scatter_mean
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
@@ -109,14 +109,16 @@ class Decoder(nn.Module):
 
     def forward(self, x: torch.Tensor, mask, batch, batch_size):
         if self.network_type == 'actor':
-            self.forward_actor(self.actor_layers, x, batch_size=batch_size, mask=mask)
+            return self.forward_actor(x, batch_size=batch_size, mask=mask)
         else:
-            self.forward_critic(self.actor_layers, x, batch=batch)
+            return self.forward_critic(x, batch=batch)
 
     def forward_actor(self, x: torch.Tensor, batch_size, mask):
         x = self.actor_layers(x)
         x = x[mask]
         x = x.view(batch_size, -1)
+        if batch_size == 1:
+            x = x.squeeze()
         return x
 
     def forward_critic(self, x: torch.Tensor, batch=None):
@@ -124,7 +126,7 @@ class Decoder(nn.Module):
         if batch is None:
             return output.mean(dim=0)
         else:
-            return torch.scatter_mean(output, batch, dim=0)
+            return scatter_mean(output, batch, dim=0)
 
 
 class MessagePassingGNN(nn.Module):
@@ -158,7 +160,7 @@ class MessagePassingGNN(nn.Module):
                                network_type=network_type,
                                device=device).to(device)
 
-    def forward(self, data: Data, network_type: str = 'actor'):
+    def forward(self, data: Data):
         x, edge_index, mask, num_nodes, batch, node_dim = (data.x, data.edge_index, data.mask, data.num_nodes,
                                                            data.batch, data.node_dim)
         if batch is None:  # not a batch

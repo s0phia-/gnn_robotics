@@ -7,13 +7,11 @@ import torch.nn as nn
 
 class Method1Gnn(Method2Gnn):
     def __init__(self,
-                 in_dim: int,
-                 num_nodes: int,
-                 action_dim: int,
                  device: torch.device,
+                 network_type: str,
                  **kwargs
                  ):
-        super().__init__(in_dim, num_nodes, action_dim, device, **kwargs)
+        Method2Gnn.__init__(device, network_type, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(GnnLayerDoubleMessage(in_dim=self.node_hidden_size,
