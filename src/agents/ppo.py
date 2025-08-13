@@ -58,7 +58,7 @@ class PPO:
             batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
 
             # Calculate the average reward per episode in this batch
-            avg_ep_reward = sum([sum(ep_rewards) for ep_rewards in batch_rewards]) / len(batch_rewards)
+            avg_ep_reward = sum([sum(ep_rewards).item() for ep_rewards in batch_rewards]) / len(batch_rewards)
             rewards_history.append([iters, avg_ep_reward])
 
             # keep track of time!
@@ -131,8 +131,6 @@ class PPO:
                 batch_log_probs.append(log_prob.cpu().item())
                 episode_rewards.append(reward)
                 if terminated or truncated:
-                    graph = self.make_graph(obs, info)
-                    batch_observations.append(graph)
                     break
             batch_lens.append(len(episode_rewards))
             batch_rewards.append(episode_rewards)
