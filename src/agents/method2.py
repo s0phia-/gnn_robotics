@@ -8,7 +8,7 @@ class Method2Gnn(MessagePassingGNN):
                  network_type: str,
                  **kwargs
                  ):
-        super().__init__(device, network_type, **kwargs)
+        MessagePassingGNN.__init__(self, device=device, network_type=network_type, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(GnnLayerDoubleAgg(in_dim=self.node_hidden_size,
@@ -67,7 +67,7 @@ class GnnLayerDoubleAgg(Gnnlayer):
         :param aggregator_type: aggregation function for GNN. Examples: mean, sum
         :param morph_weight: morphology weighting. Fully connected weighting will be 1-morph_weight
         """
-        super().__init__(in_dim, out_dim, hidden_shape, device, aggregator_type)
+        Gnnlayer.__init__(self, in_dim, out_dim, hidden_shape, device, aggregator_type)
         self.morph_weight = morph_weight
 
         # construct message functions
