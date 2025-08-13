@@ -107,13 +107,13 @@ class Decoder(nn.Module):
         layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
         return nn.Sequential(*layers)
 
-    def forward(self, x: torch.Tensor, mask, batch=None, batch_size=1):
+    def forward(self, x: torch.Tensor, mask, batch, batch_size):
         if self.network_type == 'actor':
             self.forward_actor(self.actor_layers, x, batch_size=batch_size, mask=mask)
         else:
             self.forward_critic(self.actor_layers, x, batch=batch)
 
-    def forward_actor(self, x: torch.Tensor, batch_size=1, mask=mask):
+    def forward_actor(self, x: torch.Tensor, batch_size, mask):
         x = self.actor_layers(x)
         x = x[mask]
         x = x.view(batch_size, -1)
@@ -125,6 +125,7 @@ class Decoder(nn.Module):
             return output.mean(dim=0)
         else:
             return torch.scatter_mean(output, batch, dim=0)
+
 
 class MessagePassingGNN(nn.Module):
     def __init__(self,
@@ -161,22 +162,16 @@ class MessagePassingGNN(nn.Module):
         x, edge_index, mask, num_nodes, batch, node_dim = (data.x, data.edge_index, data.mask, data.num_nodes,
                                                            data.batch, data.node_dim)
         if batch is None:  # not a batch
+            batch_size = 1
             x = self.encoder(x=x, in_dim=node_dim)
-            for i in range(self.propagation_steps):
-                x = self.middle[i](x=x, edge_index=edge_index)
-            x = self.decoder(x=x)
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            return x
-
         else:  # a batch
             batch_size = batch.max().item() + 1
             x = self.encoder(x, node_dim[0].item())
-            print(175, x.shape)
-            for i in range(self.propagation_steps):
-                x = self.middle[i](x=x, edge_index=edge_index)
-            x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
-            print(179, x.shape)
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            return x
+        for i in range(self.propagation_steps):
+            x = self.middle[i](x=x, edge_index=edge_index)
+        x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        return x
