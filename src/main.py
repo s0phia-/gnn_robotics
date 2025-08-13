@@ -6,7 +6,7 @@ import os
 import torch
 import torch.multiprocessing as mp
 import sys
-from src.utils.misc_utils import run_worker
+from src.utils.run_utils import run_worker
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
@@ -29,5 +29,5 @@ if __name__ == '__main__':
             results = pool.map(run_worker, gpu_assignments)
     else:  # CPU
         print("CUDA not available, running on CPU")
-        with mp.Pool(processes=min(5, len(hparams))) as pool:
+        with mp.Pool(processes=min(1, len(hparams))) as pool:
             results = pool.map(run_worker, hparams)
