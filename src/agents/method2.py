@@ -23,6 +23,7 @@ class Method2Gnn(MessagePassingGNN):
         if batch is None:
             edge_idx_fc, _ = dense_to_sparse(torch.ones(len(x), len(x), device=self.device))
             batch_size = 1
+
             x = self.encoder(x=x, in_dim=node_dim)
         else:
             batch_size = batch.max().item() + 1
