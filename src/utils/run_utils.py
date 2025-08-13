@@ -5,7 +5,7 @@ import yaml
 import itertools
 from copy import deepcopy
 from src.utils.logger_config import get_logger
-from src.agents import PPO, Method1Gnn, Method2Gnn, NerveNet
+from src.agents import PPO, Method1Gnn, Method2Gnn, NerveNet, EGAT, GAT
 
 
 def load_hparams(yaml_hparam_path, num_seeds=5):
@@ -70,6 +70,8 @@ def load_agent_and_env(hparam, device):
         agent = Method2Gnn
     elif method == "NerveNet":
         agent = NerveNet
+    elif method == "EGAT":
+        agent = EGAT
     else:
         raise ValueError(f"Method {method} not implemented")
     actor = agent(device=device,

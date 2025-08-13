@@ -3,7 +3,7 @@ from torch_geometric.utils import dense_to_sparse
 import torch.nn.functional as F
 from torch.nn import Linear, Parameter
 from torch_geometric.utils import softmax
-from message_utils import MessagePass
+from src.agents.message_utils import MessagePass
 
 
 class EGAT(MessagePassing):
