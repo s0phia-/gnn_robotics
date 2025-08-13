@@ -173,12 +173,12 @@ class EGAT(MessagePassing):
 
 class EGATMethod(MessagePassingGNN):
     def __init__(self,
-                 in_dim: int,
                  device: torch.device,
+                 network_type: str,
                  node_message: str = 'x_j',
                  **kwargs
                  ):
-        MessagePassingGNN.__init__(in_dim=in_dim, device=device, **kwargs)
+        MessagePassingGNN.__init__(network_type=network_type, device=device, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(EGAT(node_in_channels=self.hidden_node_dim,
@@ -191,18 +191,16 @@ class EGATMethod(MessagePassingGNN):
                                     ).to(device))
 
     def forward(self, data: Data):
-        data = torch.tensor(data, dtype=torch.float, device=self.device)
-        if data.dim() == 1:  # single observation
-            data = self.make_graph(data)
-            x, edge_idx_morph, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
-            batch = None
-
+        x, edge_idx_morph, mask, num_nodes, batch, node_dim = (data.x, data.edge_index, data.mask, data.num_nodes,
+                                                               data.batch, data.node_dim)
+        if batch is None:
             edge_idx_fc, _ = dense_to_sparse(torch.ones(len(x), len(x), device=self.device))
-        else:  # Batch of observations
-            data = self.make_graph_batch(data)
-            x, edge_idx_morph, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
-            batch = data.batch
+            batch_size = 1
 
+            x = self.encoder(x=x, in_dim=node_dim)
+        else:
+            batch_size = batch.max().item() + 1
+            # make fully connected edges
             batch_ids = torch.unique(batch)
             edges = []
             for batch_id in batch_ids:
@@ -210,8 +208,9 @@ class EGATMethod(MessagePassingGNN):
                 edges.append(torch.cartesian_prod(nodes, nodes).T)
             edge_idx_fc = torch.cat(edges, dim=1)
 
-        x = self.encoder(x=x)
+            x = self.encoder(x, node_dim[0].item())
 
+        # make edge indices
         edge_attr_combined = torch.zeros(len(edge_idx_fc[0]), 2)
         edge_attr_combined[:, -1] = 1
         for idx_morf, src_morf in enumerate(edge_idx_morph[0]):
@@ -223,30 +222,15 @@ class EGATMethod(MessagePassingGNN):
         edge_index_combined = edge_idx_fc
 
         out = {'x': x, 'edge_attr': edge_attr_combined, 'edge_index': edge_index_combined}
-
         for i in range(self.propagation_steps - 1):
             out = self.middle[i](x=out['x'],
                                  edge_index=out['edge_index'],
                                  edge_attr=out['edge_attr'])
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
         x = out['x']
 
-        x = self.decoder(x=x)
+        x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        if batch is not None:
-            x = x[mask]
-            batch_size = batch.max().item() + 1
-            x = x.view(batch_size, -1)
-            return x
-
-        else:
-            x = x.view(-1, self.num_nodes)
-            x = x.squeeze(0)
-            x = x[mask]
-            return x
+        return x
