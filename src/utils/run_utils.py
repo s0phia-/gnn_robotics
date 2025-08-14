@@ -5,7 +5,7 @@ import yaml
 import itertools
 from copy import deepcopy
 from src.utils.logger_config import get_logger
-from src.agents import PPO, Method1Gnn, Method2Gnn, NerveNet, EGAT, GAT
+from src.agents import PPO, Method1Gnn, Method2Gnn, NerveNet, EGAT, GAT, FeedForward
 
 
 def load_hparams(yaml_hparam_path, num_seeds=5):
@@ -77,9 +77,10 @@ def load_agent_and_env(hparam, device):
     actor = agent(device=device,
                   network_type='actor',
                   **hparam)
-    critic = agent(device=device,
-                   network_type='critic',
-                   **hparam)
+    critic = FeedForward(device=device,
+                         out_dim=1,
+                         hidden_shape=hparam['network_shape'],
+                         **hparam)
     return actor, critic, env
 
 
