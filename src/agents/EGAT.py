@@ -178,7 +178,7 @@ class EGATMethod(MessagePassingGNN):
                  node_message: str = 'x_j',
                  **kwargs
                  ):
-        MessagePassingGNN.__init__(network_type=network_type, device=device, **kwargs)
+        MessagePassingGNN.__init__(self, network_type=network_type, device=device, **kwargs)
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(EGAT(node_in_channels=self.hidden_node_dim,
