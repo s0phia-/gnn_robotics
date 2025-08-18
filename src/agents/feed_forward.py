@@ -30,9 +30,6 @@ class FeedForward(nn.Module):
             batch_size = data.batch.max().item() + 1
         else:
             batch_size = 1
-        num_nodes_per_graph = data.x.size(0) // batch_size
-        node_features = data.x.size(1)
-        flattened = data.x.view(batch_size, num_nodes_per_graph, node_features)
-        flattened = flattened.view(batch_size, -1)
+        flattened = data.x.view(batch_size, -1)
         flattened = flattened.squeeze()
         return self.layers(flattened)
