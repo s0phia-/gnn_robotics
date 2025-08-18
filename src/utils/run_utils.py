@@ -109,7 +109,8 @@ def run_worker(args):
         agent = PPO(actor=actor,
                     critic=critic,
                     device=device,
-                    env=env, **hparam)
+                    env=env,
+                    **hparam)
         agent.learn()
 
     return run(hparam, device)
