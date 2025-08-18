@@ -1,11 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import glob
 import csv
 import re
 import os
 from collections import defaultdict
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 
 def process_folder(folder_path):
@@ -13,35 +11,33 @@ def process_folder(folder_path):
     for filename in os.listdir(folder_path):
         if filename.startswith('.') or not filename.endswith('.csv'):
             continue
-
-        # Remove .csv extension first
         filename_no_ext = filename.replace('.csv', '')
-
-        # Use regex to find all parameter-value pairs
-        # Pattern: word characters, underscores, dashes followed by dash and value
-        pattern = r'([a-zA-Z_]+)-([^_,]+)'
-        matches = re.findall(pattern, filename_no_ext)
-
-        params_dict = {}
-
-        for param_name, param_value in matches:
-            if param_name not in ['seed', '_seed']:  # Exclude both 'seed' and '_seed' from grouping
-                params_dict[param_name] = param_value
-
-        param_key = tuple(sorted(params_dict.items()))
+        if filename_no_ext.startswith(',seed-'):
+            param_key = tuple()
+        else:
+            pattern = r'([a-zA-Z_]+)-([^_,]+)'
+            matches = re.findall(pattern, filename_no_ext)
+            params_dict = {}
+            for param_name, param_value in matches:
+                if param_name not in ['seed', '_seed']:
+                    params_dict[param_name] = param_value
+            param_key = tuple(sorted(params_dict.items()))
         file_path = os.path.join(folder_path, filename)
-
         try:
             with open(file_path, 'r') as f:
                 reader = csv.reader(f)
-                next(reader, None)  # Skip header
-                rewards = [float(row[1]) for row in reader if len(row) > 1]  # Added safety check
+                next(reader, None)
+                rewards = [float(row[1]) for row in reader if len(row) > 1]
             results[param_key].append(rewards)
         except Exception as e:
             continue
-
-    return {', '.join(f"{name}: {value}" for name, value in key): values
-            for key, values in results.items()}
+    final_results = {}
+    for key, values in results.items():
+        if key == tuple():
+            final_results["seed_only_runs"] = values
+        else:
+            final_results[', '.join(f"{name}: {value}" for name, value in key)] = values
+    return final_results
 
 
 def average_results(results_dict):
@@ -60,11 +56,10 @@ def average_results(results_dict):
             trimmed_arrays = [arr[:min_length] for arr in list_of_arrays]
             list_of_arrays = trimmed_arrays
 
-        # Convert to numpy array and average
         try:
-            array_2d = np.array(list_of_arrays)  # Shape: (num_seeds, num_timesteps)
-            averaged_results[param_str] = np.mean(array_2d, axis=0)  # Average across seeds
-        except Exception as e:
+            array_2d = np.array(list_of_arrays)
+            averaged_results[param_str] = np.mean(array_2d, axis=0)
+        except:
             averaged_results[param_str] = np.array(list_of_arrays[0])
 
     return averaged_results
@@ -100,12 +95,11 @@ def filter_top_n(data_dict, n=1):
     return {k: data_dict[k] for k in top_keys}
 
 
-def plot_rewards_with_seeds(results_folder):
-    save_path=results_folder
-    grouped_data = process_folder(results_folder)
+def plot_rewards_with_seeds(folder_path):
+    save_path = folder_path
+    grouped_data = process_folder(folder_path)
     print(grouped_data)
     plt_data = average_results(grouped_data)
-    # plt_data = filter_top_n_by_method(plt_data)
     plot_averaged_data(plt_data, save_path, smoothed=True, window_size=10)
     return plt_data
 
