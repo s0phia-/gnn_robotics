@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
+from time import sleep
 from torch_geometric.data import Data, Batch
-from src.agents import FeedForward
 
 
 class PPO:
@@ -14,7 +14,6 @@ class PPO:
     Implementation of Proximal Policy Optimization.
     Schulman, John, et al. "Proximal policy optimization algorithms."
     """
-
     def __init__(self, actor, critic, device, env, **kwargs):
         # extract parameters
         self.__dict__.update((k, v) for k, v in kwargs.items())
@@ -25,17 +24,23 @@ class PPO:
         # set up environment
         self.env = env
         self.device = device
+        self.obs_dim = self.env.observation_space.shape[0]
+        self.action_dim = self.env.action_space.shape[0]
+
+        # graph info
+        self.num_nodes = env.num_nodes
+        self.edge_index = env.edge_idx
 
         # initialise actor and critic networks
         self.actor = actor
-        self.critic = critic
+        self.critic =critic
 
         # initialise optimiser for actor and critic
         self.actor_optim = Adam(self.actor.parameters(), lr=float(self.lr))
         self.critic_optim = Adam(self.critic.parameters(), lr=float(self.lr))
 
-        # create covariance matrix depending on action size
-        self.cov_mat = lambda x: torch.eye(x, device=self.device) * 0.5
+        # initialise covariance matrix
+        self.cov_mat = torch.eye(self.action_dim, device=self.device) * 0.5
 
         # set up file paths
         self.results_dir = f"{self.run_dir}/results/"
@@ -49,7 +54,6 @@ class PPO:
         PPO learning step. Nice description and pseudocode: https://spinningup.openai.com/en/latest/algorithms/ppo.html
         """
         iters = int(0)
-        total_iters = int(self.total_timesteps / self.timesteps_per_batch)
         t = 0
         rewards_history = []
         while t < int(self.total_timesteps):
@@ -58,33 +62,29 @@ class PPO:
             batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
 
             # Calculate the average reward per episode in this batch
-            avg_ep_reward = sum([sum(ep_rewards).item() for ep_rewards in batch_rewards]) / len(batch_rewards)
-            rewards_history.append([iters, avg_ep_reward])
+            avg_ep_reward = sum([sum(ep_rewards) for ep_rewards in batch_rewards]) / len(batch_rewards)
+            rewards_history.append([iters, float(avg_ep_reward)])
 
             # keep track of time!
             t += self.timesteps_per_batch
             iters += 1
 
-            if self.advantage_method == "unnormalized":
-                advantage = batch_reward_to_go - self.get_value(batch_obs).detach()
-            if self.advantage_method == "normalized":
-                advantage = batch_reward_to_go - self.get_value(batch_obs).detach()
-                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-            if self.advantage_method == "gae":
-                next_value = self.get_value(batch_obs).detach()
-                advantages = torch.zeros_like(batch_rewards).to(self.device)
+            # find advantage, normalize
+            advantage_unnormalized = batch_reward_to_go - self.get_value(batch_obs).detach()
+            advantage = (advantage_unnormalized - advantage_unnormalized.mean()) / (advantage_unnormalized.std() + 1e-8)
 
             # loop to update network
             for _ in range(self.n_updates_per_iter):
+
                 vv = self.get_value(batch_obs)
                 log_probs = self.get_action_log_probs(batch_obs, batch_actions)
                 action_prob_ratio = torch.exp(log_probs - batch_log_probs)
 
                 # calculate losses
                 surr_loss_1 = action_prob_ratio * advantage
-                surr_loss_2 = torch.clamp(action_prob_ratio, 1 - self.clip_value, 1 + self.clip_value) * advantage
+                surr_loss_2 = torch.clamp(action_prob_ratio, 1-self.clip_value, 1+self.clip_value) * advantage
                 actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
-                critic_loss = nn.MSELoss()(vv, batch_reward_to_go)
+                critic_loss = nn.MSELoss()(vv, batch_reward_to_go.unsqueeze(1))
 
                 # backprop actor network
                 self.actor_optim.zero_grad(set_to_none=True)
@@ -96,10 +96,10 @@ class PPO:
                 critic_loss.backward()
                 self.critic_optim.step()
 
-            self.logger.info("Iteration {}/{} loss {}.".format(iters, total_iters, critic_loss.item()))
+            self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
                 # track rewards
-                np.savetxt(f"{self.results_dir}/{self.run_id}.csv", rewards_history,
+                np.savetxt(f"{self.results_dir}{self.run_id}.csv", rewards_history,
                            delimiter=',', header='iteration,reward', comments='')
                 # save model
                 torch.save(self.actor.state_dict(), f"{self.checkpoint_dir}/ppo_actor.pth")
@@ -125,25 +125,23 @@ class PPO:
         t = 0
         while t < self.timesteps_per_batch:
             episode_rewards = []
-            obs, info = self.env.reset()
+            obs, _ = self.env.reset()
             for ep_t in range(self.max_episodic_timesteps):
                 t += 1
-                graph = self.make_graph(obs, info)
-                batch_observations.append(graph)
-                action, log_prob = self.get_action(graph, calculate_log_probs=True)
-                obs, reward, terminated, truncated, info = self.env.step(action)
+                batch_observations.append(obs)
+                obs_tensor = torch.tensor(obs, dtype=torch.float32, device=self.device)
+                action, log_prob = self.get_action(obs_tensor, calculate_log_probs=True)
+                obs, reward, terminated, truncated, _ = self.env.step(action)
                 batch_actions.append(action)
-                batch_log_probs.append(log_prob.cpu().item())
+                batch_log_probs.append(log_prob.cpu().item())  # If log_prob is a scalar tensor
                 episode_rewards.append(reward)
                 if terminated or truncated:
                     break
             batch_lens.append(len(episode_rewards))
             batch_rewards.append(episode_rewards)
-        batch_observations = self.make_graph_batch(batch_observations)
+        batch_observations = torch.tensor(np.array(batch_observations), dtype=torch.float, device=self.device)
         batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float, device=self.device)
         batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float, device=self.device)
-        # if self.advantage_method == "gae":
-        #     return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens, batch_reward
         batch_rewards_to_gos = self.get_reward_to_go(batch_rewards)
         return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens, batch_rewards
 
@@ -154,8 +152,9 @@ class PPO:
         :param obs:observation to get action for
         :return: action, log probability of action (optional)
         """
-        mean_action = self.actor(obs)
-        dist = MultivariateNormal(mean_action, self.cov_mat(len(mean_action)))
+        graph = make_graph(obs, self.num_nodes, edge_index=self.edge_index)
+        mean_action = self.actor(graph)
+        dist = MultivariateNormal(mean_action, self.cov_mat)
         action = dist.sample()
         log_prob = dist.log_prob(action)
         action_cpu = action.cpu()
@@ -178,40 +177,14 @@ class PPO:
         rewards_to_go = torch.tensor(rewards_to_go, dtype=torch.float, device=self.device)
         return rewards_to_go
 
-    # def get_gae_values(self, rewards, values, dones, lengths):
-    #     for ep_rewards, ep_values, ep_dones, ep_length in reversed(zip(rewards, values, dones, lengths)):
-    #         advantages = torch.zeros_like(rewards)
-    #         last_gae_lam = 0
-    #         for t in range(ep_length):
-    #             if t == ep_length - 1:
-    #                 nextnonterminal = 1.0 - ep_dones[t]
-    #                 nextvalues = 0
-    #             else:
-    #                 nextnonterminal = 1.0 - ep_dones[t+1]
-    #                 nextvalues = ep_values[t+1]
-    #             delta = ep_rewards[t] + self.gamma * nextvalues * nextnonterminal - ep_values[t]
-    #             advantages[t] = last_gae_lam = delta + self.gamma * self.gae_lambda * nextnonterminal * last_gae_lam
-    #         ep_returns = advantages + ep_values
-    #
-    #
-    #
-    #             for t in reversed(range(num_steps)):
-    #         if t == num_steps - 1:
-    #             nextnonterminal = 1.0 - next_done
-    #             nextvalues = next_value
-    #         else:
-    #             nextnonterminal = 1.0 - dones[t + 1]
-    #             nextvalues = values[t + 1]
-    #         delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
-    #         advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
-
     def get_value(self, obs):
         """
         calculate value function for given observation.
         :param obs: observation to calculate value for
         :return: observation values
         """
-        return self.critic(obs).squeeze()
+        graph = make_graph_batch(obs, self.num_nodes, edge_index=self.edge_index)
+        return self.critic(graph)
 
     def get_action_log_probs(self, obs, actions):
         """
@@ -220,26 +193,46 @@ class PPO:
         :param actions: actions to calculate log probability for
         :return: log probabilities of actions
         """
-        batch_action = self.actor(obs)
-        dist = MultivariateNormal(batch_action, self.cov_mat(len(batch_action[0])))
+        graph_batch = make_graph_batch(obs, self.num_nodes, edge_index=self.edge_index)
+        batch_action = self.actor(graph_batch)
+        dist = MultivariateNormal(batch_action, self.cov_mat)
         log_probs = dist.log_prob(actions)
+
         return log_probs
 
-    def make_graph(self, obs, info):
-        num_nodes, edge_idx, mask = info['num_nodes'], info['edge_idx'], info['mask']
-        node_dim = int(len(obs) / num_nodes)
-        obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
-        x = obs.view(num_nodes, -1)
-        mask = torch.tensor(mask, dtype=torch.bool, device=self.device)
-        edge_idx = torch.tensor(edge_idx, device=self.device)
-        return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
-
-    @staticmethod
-    def make_graph_batch(obs_batch):
-        return Batch.from_data_list(obs_batch)
+    def demo(self, actor_path, critic_path):
+        self.load_actor(actor_path, self.device)
+        self.load_critic(critic_path, self.device)
+        self.actor.eval()
+        self.critic.eval()
+        env = self.env
+        obs = env.reset()
+        for _ in range(100):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+            action = self.get_action(obs)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            env.render()
+            sleep(.1)
 
     def load_actor(self, actor_path, device):
         self.actor.load_state_dict(torch.load(actor_path, map_location=device))
 
     def load_critic(self, critic_path, device):
         self.critic.load_state_dict(torch.load(critic_path, map_location=device))
+
+
+def make_graph(obs, num_nodes, edge_index):
+    """
+    make a pyg graph
+    """
+    x = obs.view(num_nodes, -1)
+    return Data(x=x, edge_index=edge_index)
+
+
+def make_graph_batch(obs_batch, num_nodes, edge_index):
+    data_list = []
+    for obs in obs_batch:
+        x = obs.view(num_nodes, -1)
+        graph = Data(x=x, edge_index=edge_index)
+        data_list.append(graph)
+    return Batch.from_data_list(data_list)
