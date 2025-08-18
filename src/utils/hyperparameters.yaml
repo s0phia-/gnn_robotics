@@ -11,22 +11,24 @@ gamma: 0.95
 clip_value: 0.1
 n_updates_per_iter: 10
 timesteps_per_batch: 2048
-total_timesteps: 10000
+total_timesteps: 5000000
+advantage_method: normalized  # gae, normalized, unnormalized
+gae_lambda: 0.95
 
 # GNN params
 method:
 #  - method1
 #  - method2
-#  - NerveNet
-  - EGAT
+  - NerveNet
+#  - EGAT
 propagation_steps:
-  - 3
-#  - 4
+#  - 3
+  - 4
 #  - 5
 #  - 6
 node_hidden_size:
-  - 32
-#  - 64
+#  - 32
+  - 64
 #  - 128
 network_shape:
   - [64,64]
@@ -46,7 +48,7 @@ morphology_fc_ratio:
 seed: 5
 
 #boring params
-save_model_freq: 10
+save_model_freq: 100
 
 #paths
 xml_path: 'environments/assets'

@@ -1,34 +1,38 @@
 import torch.nn as nn
 import torch
-import numpy as np
+from torch_geometric.data import Data
 
 
 class FeedForward(nn.Module):
     def __init__(self,
+                 in_dim: int,
                  hidden_shape: list,
                  out_dim: int,
-                 device: torch.device):
+                 device: torch.device,
+                 network_type='critic'):
         """
         Feed forward Neural Network
         :param in_dim: dimensions of input to network
         :param out_dim: dimensions of output of network
         """
         nn.Module.__init__(self)
-        self.hidden_shape = hidden_shape
-        self.device = device
-        self.out_dim = out_dim
-        self._layers = {}
+        self.network_type = network_type
 
-    def _get_layer(self, in_dim: int):
-        if in_dim not in self._layers:
-            self.layers = [nn.Linear(in_dim, self.hidden_shape[0], device=self.device), nn.ReLU()]
-            for i in range(len(self.hidden_shape) - 1):
-                self.layers.append(nn.Linear(self.hidden_shape[i], self.hidden_shape[i + 1], device=self.device))
-                self.layers.append(nn.ReLU())
-            self.layers.append(nn.Linear(self.hidden_shape[-1], self.out_dim, device=self.device))
-        return self._layers[in_dim]
+        self.layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.ReLU()]
+        for i in range(len(hidden_shape) - 1):
+            self.layers.append(nn.Linear(hidden_shape[i], hidden_shape[i + 1], device=device))
+            self.layers.append(nn.ReLU())
+        self.layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
+        self.layers = nn.Sequential(*self.layers)
 
-    def forward(self, x: torch.Tensor, in_dim: int) -> torch.Tensor:
-        layers = self._get_layer(in_dim)
-        layers = nn.Sequential(*layers)
-        return layers(x)
+    def forward(self, data: Data) -> torch.Tensor:
+        if data.batch is not None:
+            batch_size = data.batch.max().item() + 1
+        else:
+            batch_size = 1
+        num_nodes_per_graph = data.x.size(0) // batch_size
+        node_features = data.x.size(1)
+        flattened = data.x.view(batch_size, num_nodes_per_graph, node_features)
+        flattened = flattened.view(batch_size, -1)
+        flattened = flattened.squeeze()
+        return self.layers(flattened)

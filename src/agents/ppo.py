@@ -65,9 +65,14 @@ class PPO:
             t += self.timesteps_per_batch
             iters += 1
 
-            # find advantage, normalize
-            advantage_unnormalized = batch_reward_to_go - self.get_value(batch_obs).detach()
-            advantage = (advantage_unnormalized - advantage_unnormalized.mean()) / (advantage_unnormalized.std() + 1e-8)
+            if self.advantage_method == "unnormalized":
+                advantage = batch_reward_to_go - self.get_value(batch_obs).detach()
+            if self.advantage_method == "normalized":
+                advantage = batch_reward_to_go - self.get_value(batch_obs).detach()
+                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+            if self.advantage_method == "gae":
+                next_value = self.get_value(batch_obs).detach()
+                advantages = torch.zeros_like(batch_rewards).to(self.device)
 
             # loop to update network
             for _ in range(self.n_updates_per_iter):
@@ -137,6 +142,8 @@ class PPO:
         batch_observations = self.make_graph_batch(batch_observations)
         batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float, device=self.device)
         batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float, device=self.device)
+        # if self.advantage_method == "gae":
+        #     return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens, batch_reward
         batch_rewards_to_gos = self.get_reward_to_go(batch_rewards)
         return batch_observations, batch_actions, batch_log_probs, batch_rewards_to_gos, batch_lens, batch_rewards
 
@@ -170,6 +177,33 @@ class PPO:
                 rewards_to_go.insert(0, discounted_reward)
         rewards_to_go = torch.tensor(rewards_to_go, dtype=torch.float, device=self.device)
         return rewards_to_go
+
+    # def get_gae_values(self, rewards, values, dones, lengths):
+    #     for ep_rewards, ep_values, ep_dones, ep_length in reversed(zip(rewards, values, dones, lengths)):
+    #         advantages = torch.zeros_like(rewards)
+    #         last_gae_lam = 0
+    #         for t in range(ep_length):
+    #             if t == ep_length - 1:
+    #                 nextnonterminal = 1.0 - ep_dones[t]
+    #                 nextvalues = 0
+    #             else:
+    #                 nextnonterminal = 1.0 - ep_dones[t+1]
+    #                 nextvalues = ep_values[t+1]
+    #             delta = ep_rewards[t] + self.gamma * nextvalues * nextnonterminal - ep_values[t]
+    #             advantages[t] = last_gae_lam = delta + self.gamma * self.gae_lambda * nextnonterminal * last_gae_lam
+    #         ep_returns = advantages + ep_values
+    #
+    #
+    #
+    #             for t in reversed(range(num_steps)):
+    #         if t == num_steps - 1:
+    #             nextnonterminal = 1.0 - next_done
+    #             nextvalues = next_value
+    #         else:
+    #             nextnonterminal = 1.0 - dones[t + 1]
+    #             nextvalues = values[t + 1]
+    #         delta = rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
+    #         advantages[t] = lastgaelam = delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
 
     def get_value(self, obs):
         """

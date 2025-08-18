@@ -111,5 +111,5 @@ def plot_rewards_with_seeds(results_folder):
 
 
 if __name__ == '__main__':
-    results_folder = '../../runs/homemade_ppo_test'
+    results_folder = '../../runs/mlp_critic'
     plot_rewards_with_seeds(results_folder)
