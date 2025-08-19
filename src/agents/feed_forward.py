@@ -24,6 +24,20 @@ class FeedForward(nn.Module):
             self.layers.append(nn.ReLU())
         self.layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
         self.layers = nn.Sequential(*self.layers)
+        self._init_weights(self.layers)
+
+    def _init_weights(self, network_layers, method="orthogonal"):
+        if method == "orthogonal":
+            init_ftn = nn.init.orthogonal_
+        for layer in network_layers:
+            if isinstance(layer, nn.Linear):
+                init_ftn(layer.weight)
+                nn.init.zeros_(layer.bias)
+                if layer == network_layers[-1]:
+                    if self.network_type == 'actor':
+                        init_ftn(layer.weight, gain=0.01)
+                    elif self.network_type == 'critic':
+                        init_ftn(layer.weight, gain=1.0)
 
     def forward(self, data: Data) -> torch.Tensor:
         if data.batch is not None:

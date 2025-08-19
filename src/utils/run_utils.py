@@ -74,14 +74,14 @@ def load_agent_and_env(hparam, device):
         agent = EGAT
     else:
         raise ValueError(f"Method {method} not implemented")
-    actor = FeedForward(device=device,
-                        out_dim=8,
-                        in_dim=env.num_limbs * env.limb_obs_size,
-                        hidden_shape=hparam['network_shape'],
-                        network_type='actor')
-    # actor = agent(device=device,
-    #               network_type='actor',
-    #               **hparam)
+    # actor = FeedForward(device=device,
+    #                     out_dim=8,
+    #                     in_dim=env.num_limbs * env.limb_obs_size,
+    #                     hidden_shape=hparam['network_shape'],
+    #                     network_type='actor')
+    actor = agent(device=device,
+                  network_type='actor',
+                  **hparam)
     critic = FeedForward(device=device,
                          out_dim=1,
                          in_dim=env.num_limbs * env.limb_obs_size,

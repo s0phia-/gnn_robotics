@@ -51,21 +51,29 @@ class Gnnlayer(MessagePassing):
         """
         super().__init__(aggr=aggregator_type)
         self.device = device
-
         # construct message function
         self.message_function = self._build_mlp(in_dim * 2, hidden_shape, out_dim, device)
-
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim, hidden_size=out_dim, device=device)
 
-    @staticmethod
-    def _build_mlp(in_dim, hidden_shape, out_dim, device):
+    def _build_mlp(self, in_dim, hidden_shape, out_dim, device):
         layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
         for i in range(len(hidden_shape) - 1):
             layers.append(nn.Linear(hidden_shape[i], hidden_shape[i+1], device=device))
             layers.append(nn.Tanh())
         layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
-        return nn.Sequential(*layers)
+        network_layers = nn.Sequential(*layers)
+        # self._init_weights(network_layers)
+        return network_layers
+
+    @staticmethod
+    def _init_weights(network_layers, method="orthogonal"):
+        if method == "orthogonal":
+            init_ftn = nn.init.orthogonal_
+        for layer in network_layers:
+            if isinstance(layer, nn.Linear):
+                init_ftn(layer.weight)
+                nn.init.zeros_(layer.bias)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
@@ -98,14 +106,24 @@ class Decoder(nn.Module):
         self.actor_layers = self._build_mlp(in_dim, hidden_shape, out_dim, device)
         self.critic_layers = self._build_mlp(in_dim, hidden_shape, 1, device)
 
-    @staticmethod
-    def _build_mlp(in_dim, hidden_shape, out_dim, device):
+    def _build_mlp(self, in_dim, hidden_shape, out_dim, device):
         layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
         for i in range(len(hidden_shape) - 1):
             layers.append(nn.Linear(hidden_shape[i], hidden_shape[i+1], device=device))
             layers.append(nn.Tanh())
         layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
-        return nn.Sequential(*layers)
+        layers = nn.Sequential(*layers)
+        # self._init_weights(layers)
+        return layers
+
+    @staticmethod
+    def _init_weights(network_layers, method="orthogonal"):
+        if method == "orthogonal":
+            init_ftn = nn.init.orthogonal_
+        for layer in network_layers:
+            if isinstance(layer, nn.Linear):
+                init_ftn(layer.weight)
+                nn.init.zeros_(layer.bias)
 
     def forward(self, x: torch.Tensor, mask, batch, batch_size):
         if self.network_type == 'actor':
@@ -143,17 +161,14 @@ class MessagePassingGNN(nn.Module):
         nn.Module.__init__(self)
         self.__dict__.update((k, v) for k, v in kwargs.items())
         self.device = device
-
         self.encoder = Encoder(hidden_dim=self.node_hidden_size,
                                device=device).to(device)
-
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(Gnnlayer(in_dim=self.node_hidden_size,
                                         out_dim=self.node_hidden_size,
                                         hidden_shape=self.network_shape,
                                         device=device))
-
         self.decoder = Decoder(in_dim=self.node_hidden_size,
                                out_dim=1,
                                hidden_shape=self.network_shape,
@@ -172,8 +187,6 @@ class MessagePassingGNN(nn.Module):
         for i in range(self.propagation_steps):
             x = self.middle[i](x=x, edge_index=edge_index)
         x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
-
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
         return x
