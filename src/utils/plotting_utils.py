@@ -9,11 +9,11 @@ from collections import defaultdict
 def process_folder(folder_path):
     results = defaultdict(list)
     for filename in os.listdir(folder_path):
-        if filename.startswith('.') or not filename.endswith('.csv'):
-            continue
         filename_no_ext = filename.replace('.csv', '')
         if filename_no_ext.startswith(',seed-'):
-            param_key = tuple()
+            seed_match = re.search(r',seed-(\d+)', filename_no_ext)
+            if seed_match:
+                param_key = tuple()  # Empty tuple groups all seed files together
         else:
             pattern = r'([a-zA-Z_]+)-([^_,]+)'
             matches = re.findall(pattern, filename_no_ext)
@@ -26,14 +26,15 @@ def process_folder(folder_path):
         try:
             with open(file_path, 'r') as f:
                 reader = csv.reader(f)
-                next(reader, None)
+                header = next(reader, None)
                 rewards = [float(row[1]) for row in reader if len(row) > 1]
             results[param_key].append(rewards)
         except Exception as e:
+            print(f"Error reading file {filename}: {e}")
             continue
     final_results = {}
     for key, values in results.items():
-        if key == tuple():
+        if key == tuple():  # Empty tuple for seed-only files
             final_results["seed_only_runs"] = values
         else:
             final_results[', '.join(f"{name}: {value}" for name, value in key)] = values
@@ -43,25 +44,19 @@ def process_folder(folder_path):
 def average_results(results_dict):
     """Fixed averaging function that handles different length arrays"""
     averaged_results = {}
-
     for param_str, list_of_arrays in results_dict.items():
-
         if not list_of_arrays:
             continue
-
         lengths = [len(arr) for arr in list_of_arrays]
-
         if len(set(lengths)) > 1:
             min_length = min(lengths)
             trimmed_arrays = [arr[:min_length] for arr in list_of_arrays]
             list_of_arrays = trimmed_arrays
-
         try:
             array_2d = np.array(list_of_arrays)
             averaged_results[param_str] = np.mean(array_2d, axis=0)
         except:
             averaged_results[param_str] = np.array(list_of_arrays[0])
-
     return averaged_results
 
 
@@ -105,5 +100,5 @@ def plot_rewards_with_seeds(folder_path):
 
 
 if __name__ == '__main__':
-    results_folder = '../../runs/mlp_critic'
+    results_folder = '../../runs/6464/results'
     plot_rewards_with_seeds(results_folder)
