@@ -72,6 +72,8 @@ def load_agent_and_env(hparam, device):
         agent = NerveNet
     elif method == "EGAT":
         agent = EGAT
+    elif method == "GAT":
+        agent = GAT
     else:
         raise ValueError(f"Method {method} not implemented")
     # actor = FeedForward(device=device,

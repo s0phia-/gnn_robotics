@@ -1,5 +1,5 @@
 from src.agents.nerve_net import *
-from torch_geometric.utils import dense_to_sparse
+from torch_geometric.nn import GATConv
 import torch.nn.functional as F
 from torch.nn import Linear, Parameter
 from torch_geometric.utils import softmax
@@ -202,7 +202,6 @@ class EGATMethod(MessagePassingGNN):
             torch.cuda.empty_cache()
         return x
 
-from torch_geometric.nn import GATConv
 
 class GATMethod(MessagePassingGNN):
     def __init__(self,
@@ -233,12 +232,9 @@ class GATMethod(MessagePassingGNN):
             batch_size = batch.max().item() + 1
             x = self.encoder(x, node_dim[0].item())  # todo
 
-        out = {'x': x, 'edge_attr': edge_attr, 'edge_index': edge_idx}
         for i in range(self.propagation_steps - 1):
-            out = self.middle[i](x=out['x'],
-                                 edge_index=out['edge_index'],
-                                 edge_attr=out['edge_attr'])
-        x = out['x']
+            x = self.middle[i](x=x, edge_index=edge_idx, edge_attr=edge_attr)
+
         x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

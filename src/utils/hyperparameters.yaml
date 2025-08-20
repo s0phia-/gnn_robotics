@@ -22,6 +22,7 @@ method:
 #  - method2
 #  - NerveNet
   - EGAT
+  - GAT
 propagation_steps:
   - 3
 #  - 4
