@@ -2,6 +2,7 @@ from src.agents.nerve_net import *
 import torch.nn.functional as F
 from torch.nn import Linear, Parameter
 from torch_geometric.utils import softmax
+from src.agents.message_utils import MessagePass
 
 
 class GAT(MessagePassing):
@@ -12,6 +13,7 @@ class GAT(MessagePassing):
                  concat=True,
                  negative_slope=0.2,
                  dropout=0.0,
+                 node_message='x_j',
                  add_self_loops=False,
                  contribution=0.5):
         """
@@ -34,6 +36,9 @@ class GAT(MessagePassing):
         self.negative_slope = negative_slope
         self.dropout = dropout
         self.add_self_loops = add_self_loops
+        self.node_message = MessagePass(node_message,
+                                        in_channels,
+                                        out_channels)
 
         # node method initialisation
         self.src_lin = Linear(in_channels, heads * out_channels,

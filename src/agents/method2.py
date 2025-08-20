@@ -1,5 +1,4 @@
 from src.agents.nerve_net import *
-from torch_geometric.utils import dense_to_sparse
 
 
 class Method2Gnn(MessagePassingGNN):
@@ -18,27 +17,18 @@ class Method2Gnn(MessagePassingGNN):
                                                  morph_weight=self.morphology_fc_ratio))
 
     def forward(self, data):
-        x, edge_idx_morph, mask, num_nodes, batch, node_dim = (data.x, data.edge_index, data.mask, data.num_nodes,
-                                                               data.batch, data.node_dim)
-        if batch is None:
-            edge_idx_fc, _ = dense_to_sparse(torch.ones(len(x), len(x), device=self.device))
-            batch_size = 1
+        x, edge_idx, mask, num_nodes, batch, node_dim, edge_type = (data.x, data.edge_index, data.mask, data.num_nodes,
+                                                                    data.batch, data.node_dim, data.edge_attr)
 
+        if batch is None:
+            batch_size = 1
             x = self.encoder(x=x, in_dim=node_dim)
         else:
             batch_size = batch.max().item() + 1
-            # make fully connected edges
-            batch_ids = torch.unique(batch)
-            edges = []
-            for batch_id in batch_ids:
-                nodes = torch.where(batch == batch_id)[0]
-                edges.append(torch.cartesian_prod(nodes, nodes).T)
-            edge_idx_fc = torch.cat(edges, dim=1)
-
-            x = self.encoder(x, node_dim[0].item())
+            x = self.encoder(x, node_dim[0].item())  # todo
 
         for i in range(self.propagation_steps):
-            x = self.middle[i](x=x, edge_morph=edge_idx_morph, edge_fc=edge_idx_fc)
+            x = self.middle[i](x=x, edge_idx=edge_idx, edge_type=edge_type)
 
         x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
 
@@ -71,26 +61,28 @@ class GnnLayerDoubleAgg(Gnnlayer):
         self.morph_weight = morph_weight
 
         # construct message functions
+        self.message_function_type0 = self._build_mlp(in_dim * 2, hidden_shape, out_dim * 2, device)
         self.message_function_type1 = self._build_mlp(in_dim * 2, hidden_shape, out_dim * 2, device)
-        self.message_function_type2 = self._build_mlp(in_dim * 2, hidden_shape, out_dim * 2, device)
 
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim * 2, hidden_size=out_dim, device=device)
 
-    def forward(self, x: torch.Tensor, edge_morph: torch.Tensor, edge_fc: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, edge_idx: torch.Tensor, edge_type: torch.Tensor) -> torch.Tensor:
 
+        edge_morph = edge_idx[:, edge_type[:, 0].bool()]
         edge_morph, _ = add_self_loops(edge_morph, num_nodes=x.size(0))
-        agg_type1 = self.propagate(edge_morph, x=x, edge_type=1)
+        agg_type0 = self.propagate(edge_morph, x=x, edge_type=0)
 
-        agg_type2 = self.propagate(edge_fc, x=x, edge_type=2)
+        edge_fc = edge_idx[:, edge_type[:, 1].bool()]
+        agg_type1 = self.propagate(edge_fc, x=x, edge_type=1)
 
-        combined_agg = torch.cat([agg_type1, agg_type2], dim=1)
+        combined_agg = torch.cat([agg_type0, agg_type1], dim=1)
         updated_features = self.update_function(combined_agg, x)
         return updated_features
 
     def message(self, x_i, x_j, edge_type):
         msg = torch.cat([x_i, x_j], dim=-1)
-        if edge_type == 1:  # morphology respecting
-            return self.message_function_type1(msg) * self.morph_weight
-        if edge_type == 2:  # fully connected
-            return self.message_function_type2(msg) * (1 - self.morph_weight)
+        if edge_type == 0:  # morphology respecting
+            return self.message_function_type0(msg) * self.morph_weight
+        if edge_type == 1:  # fully connected
+            return self.message_function_type1(msg) * (1 - self.morph_weight)

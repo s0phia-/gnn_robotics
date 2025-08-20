@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 from torch_geometric.data import Data, Batch
+from torch_geometric.utils import dense_to_sparse
 
 
 class PPO:
@@ -94,7 +95,7 @@ class PPO:
             self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
                 # track rewards
-                np.savetxt(f"{self.results_dir}/{self.run_id}.csv", rewards_history,
+                np.savetxt(f"{self.results_dir}{self.run_id}.csv", rewards_history,
                            delimiter=',', header='iteration,reward', comments='')
                 # save model
                 torch.save(self.actor.state_dict(), f"{self.checkpoint_dir}/ppo_actor.pth")
@@ -225,13 +226,19 @@ class PPO:
         return log_probs
 
     def make_graph(self, obs, info):
-        num_nodes, edge_idx, mask = info['num_nodes'], info['edge_idx'], info['mask']
+        num_nodes, morph_edges, mask = info['num_nodes'], info['edge_idx'], info['mask']
         node_dim = int(len(obs) / num_nodes)
         obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
         x = obs.view(num_nodes, -1)
         mask = torch.tensor(mask, dtype=torch.bool, device=self.device)
-        edge_idx = torch.tensor(edge_idx, device=self.device)
-        return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
+        # get morph and fc edges
+        fc_edges, _ = dense_to_sparse(torch.ones(len(x), len(x)))
+        morph_edges = torch.tensor(morph_edges, device=self.device)
+        # combine edges and create labels
+        edges, inverse_idx = torch.unique(torch.cat([fc_edges, morph_edges], dim=1), dim=1, return_inverse=True)
+        morph_labels = torch.zeros(fc_edges.shape[1]).scatter_(0, inverse_idx[fc_edges.shape[1]:], 1)
+        edge_labels = torch.stack([morph_labels, torch.ones_like(morph_labels)], dim=1)
+        return Data(x=x, edge_index=edges, edge_attr=edge_labels, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
 
     @staticmethod
     def make_graph_batch(obs_batch):
