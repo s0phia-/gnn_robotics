@@ -15,6 +15,7 @@ timesteps_per_batch: 20
 total_timesteps: 500000
 advantage_method: normalized  # gae, normalized, unnormalized
 gae_lambda: 0.95
+grad_clip_value: 5
 
 # GNN params
 method:

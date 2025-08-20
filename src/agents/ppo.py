@@ -85,11 +85,13 @@ class PPO:
                 # backprop actor network
                 self.actor_optim.zero_grad(set_to_none=True)
                 actor_loss.backward()
+                nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_value)
                 self.actor_optim.step()
 
                 # backprop critic network
                 self.critic_optim.zero_grad(set_to_none=True)
                 critic_loss.backward()
+                nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip_value)
                 self.critic_optim.step()
 
             self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
