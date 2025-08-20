@@ -6,24 +6,26 @@ population_size: 8
 enable_features: True
 
 #PPO params
-actor_lr: 1e-3
-value_lr: 1e-3
+learning_rate: 1e-3
 gamma: 0.99
 clip_value: 0.2
-n_updates_per_iter: 10
-timesteps_per_batch: 20
+update_epochs: 10
+batch_size: 20
+num_minibatches: 2
 total_timesteps: 500000
-advantage_method: normalized  # gae, normalized, unnormalized
+advantage_method: gae  # gae, simple
+normalize_advantage: True
 gae_lambda: 0.95
 grad_clip_value: 5
+mixed_precision: True  # potential speed up
 
 # GNN params
 method:
 #  - method1
 #  - method2
-#  - NerveNet
-  - EGAT
-  - GAT
+  - NerveNet
+#  - EGAT
+#  - GAT
 propagation_steps:
   - 3
 #  - 4

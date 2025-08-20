@@ -1,6 +1,7 @@
 from src.utils.logger_config import get_logger
 import numpy as np
 import os
+import itertools
 import torch
 import torch.nn as nn
 from torch.optim import Adam
@@ -29,11 +30,13 @@ class PPO:
         self.critic = critic
 
         # initialise optimiser for actor and critic
-        self.actor_optim = Adam(self.actor.parameters(), lr=float(self.actor_lr))
-        self.critic_optim = Adam(self.critic.parameters(), lr=float(self.value_lr))
+        self.optimizer = torch.optim.Adam(
+            itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
 
         # create covariance matrix depending on action size
         self.cov_mat = lambda x: torch.eye(x, device=self.device) * 0.5
+        self.minibatch_size = int(self.batch_size // self.num_minibatches)
 
         # set up file paths
         self.results_dir = f"{self.run_dir}/results/"
@@ -51,48 +54,59 @@ class PPO:
         rewards_history = []
         while t < int(self.total_timesteps):
             # perform a rollout
-            batch_obs, batch_actions, batch_log_probs, batch_rtgs, batch_lens, batch_rewards, batch_dones, batch_last_obs = self.rollout()
+            b_obs, b_actions, b_log_probs, b_rtgs, b_lens, b_rewards, b_dones, b_last_obs = self.rollout()
 
             # Calculate the average reward per episode in this batch
-            avg_ep_reward = sum([sum(ep_rewards).item() for ep_rewards in batch_rewards]) / len(batch_rewards)
+            avg_ep_reward = sum([sum(ep_rewards).item() for ep_rewards in b_rewards]) / len(b_rewards)
             rewards_history.append([iters, avg_ep_reward])
 
             # keep track of time!
-            t += self.timesteps_per_batch
+            t += self.batch_size
             iters += 1
 
-            if self.advantage_method == "unnormalized":
-                advantage = batch_rtgs - self.get_value(batch_obs).detach()
-            if self.advantage_method == "normalized":
-                advantage = batch_rtgs - self.get_value(batch_obs).detach()
-                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+            if self.advantage_method == "simple":
+                b_advantages = b_rtgs - self.get_value(b_obs).detach()
             if self.advantage_method == "gae":
-                values = self.get_value(batch_obs).detach()
-                advantage = self.compute_gae(batch_rewards, batch_dones, values, batch_last_obs)
+                values = self.get_value(b_obs).detach()
+                b_advantages = self.compute_gae(b_rewards, b_dones, values, b_last_obs)
 
-            # loop to update network
-            for _ in range(self.n_updates_per_iter):
-                vv = self.get_value(batch_obs)
-                log_probs = self.get_action_log_probs(batch_obs, batch_actions)
-                action_prob_ratio = torch.exp(log_probs - batch_log_probs)
+            for epoch in range(self.update_epochs):
+                b_inds = torch.randperm(self.batch_size, device=self.device)
+                for start in range(0, self.batch_size, self.minibatch_size):
+                    end = start + self.minibatch_size
+                    mb_inds = b_inds[start:end]
 
-                # calculate losses
-                surr_loss_1 = action_prob_ratio * advantage
-                surr_loss_2 = torch.clamp(action_prob_ratio, 1 - self.clip_value, 1 + self.clip_value) * advantage
-                actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
-                critic_loss = nn.MSELoss()(vv, batch_rtgs)
+                    vv = self.get_value(b_obs)
+                    log_probs = self.get_action_log_probs(b_obs, b_actions)
+                    act_prob_ratio = torch.exp(log_probs - b_log_probs)
 
-                # backprop actor network
-                self.actor_optim.zero_grad(set_to_none=True)
-                actor_loss.backward()
-                nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_value)
-                self.actor_optim.step()
+                    mb_advantages = b_advantages[mb_inds]
+                    if self.normalize_advantage:
+                        mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
-                # backprop critic network
-                self.critic_optim.zero_grad(set_to_none=True)
-                critic_loss.backward()
-                nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip_value)
-                self.critic_optim.step()
+                    # calculate losses
+                    surr_loss_1 = act_prob_ratio * mb_advantages
+                    surr_loss_2 = torch.clamp(act_prob_ratio, 1 - self.clip_value, 1 + self.clip_value) * mb_advantages
+                    actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
+                    critic_loss = nn.MSELoss()(b_rtgs, vv)
+
+                    # backprop actor network
+                    self.optimizer.zero_grad()
+                    self.scaler.scale(actor_loss + critic_loss).backward()
+
+                    if self.grad_clip_value > 0:
+                        self.scaler.unscale_(self.optimizer)
+                        if self.actor is self.critic:
+                            nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_value)
+                        else:
+                            nn.utils.clip_grad_norm_(
+                                itertools.chain(self.actor.parameters(), self.critic.parameters()),
+                                self._grad_norm_clip
+                            )
+
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+
 
             self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
@@ -123,7 +137,7 @@ class PPO:
         b_dones = []
         b_last_obs = []
         t = 0
-        while t < self.timesteps_per_batch:
+        while t < self.batch_size:
             episode_rewards = []
             obs, info = self.env.reset()
             for ep_t in range(self.max_episodic_timesteps):
