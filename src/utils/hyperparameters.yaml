@@ -6,11 +6,11 @@ population_size: 8
 enable_features: True
 
 #PPO params
-learning_rate: 1e-3
+learning_rate: 0.001
 gamma: 0.99
 clip_value: 0.2
 update_epochs: 10
-batch_size: 20
+batch_size: 2000
 num_minibatches: 2
 total_timesteps: 500000
 advantage_method: gae  # gae, simple

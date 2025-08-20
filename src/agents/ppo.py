@@ -32,7 +32,7 @@ class PPO:
         # initialise optimiser for actor and critic
         self.optimizer = torch.optim.Adam(
             itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision)
+        self.scaler = torch.amp.GradScaler(device=self.device, enabled=self.mixed_precision)
 
         # create covariance matrix depending on action size
         self.cov_mat = lambda x: torch.eye(x, device=self.device) * 0.5
@@ -68,7 +68,8 @@ class PPO:
                 b_advantages = b_rtgs - self.get_value(b_obs).detach()
             if self.advantage_method == "gae":
                 values = self.get_value(b_obs).detach()
-                b_advantages = self.compute_gae(b_rewards, b_dones, values, b_last_obs)
+                last_value = self.get_value(b_last_obs).detach()
+                b_advantages = self.compute_gae(b_rewards, b_dones, values, last_value)
 
             for epoch in range(self.update_epochs):
                 b_inds = torch.randperm(self.batch_size, device=self.device)
@@ -77,10 +78,12 @@ class PPO:
                     mb_inds = b_inds[start:end]
 
                     vv = self.get_value(b_obs)
+                    mb_vv = vv[mb_inds]
                     log_probs = self.get_action_log_probs(b_obs, b_actions)
-                    act_prob_ratio = torch.exp(log_probs - b_log_probs)
+                    mb_log_probs = log_probs[mb_inds]
+                    act_prob_ratio = torch.exp(mb_log_probs - b_log_probs[mb_inds])
 
-                    mb_advantages = b_advantages[mb_inds]
+                    mb_advantages = b_advantages[mb_inds]  # todo are these in the right place? calculated inside mb?
                     if self.normalize_advantage:
                         mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
@@ -88,7 +91,7 @@ class PPO:
                     surr_loss_1 = act_prob_ratio * mb_advantages
                     surr_loss_2 = torch.clamp(act_prob_ratio, 1 - self.clip_value, 1 + self.clip_value) * mb_advantages
                     actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
-                    critic_loss = nn.MSELoss()(b_rtgs, vv)
+                    critic_loss = nn.MSELoss()(b_rtgs[mb_inds], mb_vv)
 
                     # backprop actor network
                     self.optimizer.zero_grad()
@@ -101,9 +104,7 @@ class PPO:
                         else:
                             nn.utils.clip_grad_norm_(
                                 itertools.chain(self.actor.parameters(), self.critic.parameters()),
-                                self._grad_norm_clip
-                            )
-
+                                self.grad_clip_value)
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
 
@@ -150,18 +151,18 @@ class PPO:
                 b_log_probs.append(log_prob.cpu().item())
                 b_dones.append(terminated or truncated)
                 episode_rewards.append(reward)
+                b_rewards.append(reward)
                 if terminated or truncated:
-                    last_obs = obs
+                    b_last_obs.append(self.make_graph(obs, info))
                     break
             b_lens.append(len(episode_rewards))
-            b_rewards.append(episode_rewards)
-            b_last_obs.append(last_obs)
         b_observations = self.make_graph_batch(b_observations)
         b_actions = torch.tensor(np.array(b_actions), dtype=torch.float, device=self.device)
         b_log_probs = torch.tensor(b_log_probs, dtype=torch.float, device=self.device)
         b_dones = torch.tensor(np.array(b_dones), dtype=torch.bool, device=self.device)
+        b_rewards = torch.tensor(np.array(b_rewards), dtype=torch.float, device=self.device)
         b_rtgs = self.get_reward_to_go(b_rewards)
-        b_last_obs = torch.tensor(np.array(b_last_obs), dtype=torch.float, device=self.device)
+        b_last_obs = self.make_graph_batch(b_last_obs)
         return b_observations, b_actions, b_log_probs, b_rtgs, b_lens, b_rewards, b_dones, b_last_obs
 
     def get_action(self, obs, calculate_log_probs=False):
@@ -201,17 +202,15 @@ class PPO:
                     values: torch.Tensor,
                     last_value: torch.Tensor,
                     ) -> torch.Tensor:
+        rewards = rewards.squeeze(-1)
         advantage = 0
         advantages = torch.zeros_like(rewards)
         not_dones = dones.logical_not()
         memory_size = rewards.shape[0]
         for i in reversed(range(memory_size)):
             next_values = values[i + 1] if i < memory_size - 1 else last_value
-            advantage = (
-                    rewards[i]
-                    - values[i]
-                    + self.gamma * not_dones[i] * (next_values + self.gae_lambda * advantage)
-            )
+            advantage = (rewards[i] - values[i] + self.gamma * not_dones[i] * (next_values
+                                                                               + self.gae_lambda * advantage))
             advantages[i] = advantage
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         return advantages
