@@ -8,7 +8,8 @@ class FeedForward(nn.Module):
                  in_dim: int,
                  hidden_shape: list,
                  out_dim: int,
-                 device: torch.device):
+                 device: torch.device,
+                 ):
         """
         Feed forward Neural Network
         :param in_dim: dimensions of input to network

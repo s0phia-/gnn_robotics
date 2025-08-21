@@ -99,5 +99,5 @@ def plot_rewards_with_seeds(folder_path):
 
 
 if __name__ == '__main__':
-    results_folder = '../../runs/ok/results'
+    results_folder = '../../runs/new_ff/results'
     plot_rewards_with_seeds(results_folder)
