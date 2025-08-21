@@ -93,12 +93,11 @@ def filter_top_n(data_dict, n=1):
 def plot_rewards_with_seeds(folder_path):
     save_path = folder_path
     grouped_data = process_folder(folder_path)
-    print(grouped_data)
     plt_data = average_results(grouped_data)
     plot_averaged_data(plt_data, save_path, smoothed=True, window_size=10)
     return plt_data
 
 
 if __name__ == '__main__':
-    results_folder = '../../runs/gnn/results'
+    results_folder = '../../runs/ok/results'
     plot_rewards_with_seeds(results_folder)

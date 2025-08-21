@@ -79,8 +79,7 @@ def load_agent_and_env(hparam, device):
     actor = FeedForward(device=device,
                         out_dim=8,
                         in_dim=env.num_limbs * env.limb_obs_size,
-                        hidden_shape=hparam['network_shape'],
-                        network_type='actor')
+                        hidden_shape=hparam['network_shape'])
     # actor = agent(device=device,
     #               network_type='actor',
     #               **hparam)
