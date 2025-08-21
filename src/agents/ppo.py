@@ -32,12 +32,7 @@ class PPO:
             itertools.chain(self.actor.parameters(), self.critic.parameters()), lr=self.learning_rate)
         self.scaler = torch.amp.GradScaler(device=self.device, enabled=self.mixed_precision)
 
-        # # initialise optimiser for actor and critic
-        # self.actor_optim = Adam(self.actor.parameters(), lr=float(self.lr))
-        # self.critic_optim = Adam(self.critic.parameters(), lr=float(self.lr))
-
-        # initialise covariance matrix
-        self.cov_mat = torch.eye(8, device=self.device) * 0.5
+        self.minibatch_size = int(self.batch_size // self.num_minibatches)
 
         # set up file paths
         self.results_dir = f"{self.run_dir}/results/"
@@ -56,10 +51,10 @@ class PPO:
         while t < int(self.total_timesteps):
 
             # perform a rollout
-            batch_obs, batch_actions, batch_log_probs, batch_reward_to_go, batch_lens, batch_rewards = self.rollout()
+            b_obs, b_actions, b_log_probs, b_reward_to_go, b_lens, b_rewards = self.rollout()
 
-            # Calculate average reward per episode in this batch
-            avg_ep_reward = sum([sum(ep_rewards) for ep_rewards in batch_rewards]) / len(batch_rewards)
+            # Calculate the average reward per episode in this batch
+            avg_ep_reward = sum([sum(ep_rewards).item() for ep_rewards in b_rewards]) / len(b_rewards)
             rewards_history.append([int(iters), float(avg_ep_reward)])
 
             # keep track of time!
@@ -67,21 +62,21 @@ class PPO:
             iters += 1
 
             # find advantage, normalize
-            advantage_unnormalized = batch_reward_to_go - self.get_value(batch_obs).detach()
+            advantage_unnormalized = b_reward_to_go - self.get_value(b_obs).detach()
             advantage = (advantage_unnormalized - advantage_unnormalized.mean()) / (advantage_unnormalized.std() + 1e-8)
 
             # loop to update network
             for _ in range(self.n_updates_per_iter):
 
-                vv = self.get_value(batch_obs)
-                log_probs = self.get_action_log_probs(batch_obs, batch_actions)
-                action_prob_ratio = torch.exp(log_probs - batch_log_probs)
+                vv = self.get_value(b_obs)
+                log_probs = self.get_action_log_probs(b_obs, b_actions)
+                action_prob_ratio = torch.exp(log_probs - b_log_probs)
 
                 # calculate losses
                 surr_loss_1 = action_prob_ratio * advantage
                 surr_loss_2 = torch.clamp(action_prob_ratio, 1-self.clip_value, 1+self.clip_value) * advantage
                 actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
-                critic_loss = nn.MSELoss()(vv, batch_reward_to_go)
+                critic_loss = nn.MSELoss()(vv, b_reward_to_go)
 
                 # # backprop actor network
                 # self.actor_optim.zero_grad(set_to_none=True)
@@ -95,6 +90,16 @@ class PPO:
 
                 self.optimizer.zero_grad()
                 self.scaler.scale(actor_loss + critic_loss).backward()
+
+                if self.grad_clip_value > 0:
+                    self.scaler.unscale_(self.optimizer)
+                    if self.actor is self.critic:
+                        nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_value)
+                    else:
+                        nn.utils.clip_grad_norm_(
+                            itertools.chain(self.actor.parameters(), self.critic.parameters()),
+                            self.grad_clip_value)
+
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
