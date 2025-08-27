@@ -7,16 +7,18 @@ enable_features: True
 
 #PPO params
 learning_rate: 0.0003
-gamma: 0.95
-clip_value: 0.1
-update_epochs: 10
-timesteps_per_batch: 2048
-total_timesteps: 2000000
+gamma: 0.99
+clip_value: 0.5
+update_epochs: 8
+total_timesteps: 1000000
 mixed_precision: False
-grad_clip_value: 5
-batch_size: 2000
+grad_clip_value: 0.5
+rollouts: 16
 num_minibatches: 2
 normalize_advantage: True
+advantage_method: "gae"  # regular, gae
+gae_lambda: 0.95
+opt_together: True  # set to true if actor and critic are separate networks that should be updated together
 
 # GNN params
 method:
