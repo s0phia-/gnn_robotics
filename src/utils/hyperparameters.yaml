@@ -1,8 +1,8 @@
 #env params
 env_name:
   - ant
-max_episodic_timesteps: 2000
-population_size: 8
+max_episodic_timesteps: 2048
+population_size: 1
 enable_features: True
 
 #PPO params
@@ -13,8 +13,7 @@ update_epochs: 8
 total_timesteps: 1000000
 mixed_precision: False
 grad_clip_value: 0.5
-rollouts: 16
-num_minibatches: 2
+rollouts: 8
 normalize_advantage: True
 advantage_method: "gae"  # regular, gae
 gae_lambda: 0.95
