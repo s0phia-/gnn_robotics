@@ -15,7 +15,7 @@ class Encoder(nn.Module):
         :param hidden_dim:
         :param device:
         """
-        super().__init__()
+        nn.Module.__init__(self)
         self.device = device
         self.hidden_dim = hidden_dim
         self._layers = {}

@@ -1,6 +1,7 @@
 import shutil
 import os
 import datetime
+import torch
 import yaml
 import itertools
 from copy import deepcopy
@@ -10,11 +11,33 @@ from src.agents import PPO, Method1Gnn, Method2Gnn, NerveNet, EGAT, GAT, FeedFor
 
 def load_hparams(yaml_hparam_path, num_seeds=5):
     """
-    :param yaml_hparam_path: path to YAML hyperparameters
-    :param num_seeds: number of different seeds to use
+    AI wrote this function. it's gross but it's not complicated and it works. but gross.
     """
     with open(yaml_hparam_path, 'r') as f:
         hparam = yaml.safe_load(f)
+
+    # Handle env_name parsing
+    if 'env_name' in hparam:
+        if isinstance(hparam['env_name'], list):
+            # Handle list format: check each item for commas
+            processed_env_names = []
+            for env_item in hparam['env_name']:
+                if isinstance(env_item, str) and ',' in env_item:
+                    # Split comma-separated string: "ant,hopper" -> ["ant", "hopper"]
+                    processed_env_names.append([name.strip() for name in env_item.split(',')])
+                else:
+                    # Single environment: "ant" -> ["ant"]
+                    processed_env_names.append([env_item] if isinstance(env_item, str) else env_item)
+            hparam['env_name'] = processed_env_names
+        elif isinstance(hparam['env_name'], str):
+            if ',' in hparam['env_name']:
+                # Single comma-separated string: "ant,hopper" -> [["ant", "hopper"]]
+                hparam['env_name'] = [[name.strip() for name in hparam['env_name'].split(',')]]
+            else:
+                # Single environment string: "ant" -> [["ant"]]
+                hparam['env_name'] = [[hparam['env_name']]]
+
+    # Rest of the function remains the same...
     run_dir = f"../runs/run_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
     os.makedirs(run_dir, exist_ok=True)
     os.makedirs(f"{run_dir}/checkpoints", exist_ok=True)
@@ -52,17 +75,16 @@ def load_hparams(yaml_hparam_path, num_seeds=5):
     return all_combinations
 
 
-def load_env(hparam, device):
+def load_env(hparam):
     from src.environments.mujoco_parser import MujocoParser
-    env_setup = MujocoParser(**hparam)
-    env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
-    print(f"{env=}, {node_dim=}, {num_nodes=}")
-    env.reset()
-    return env
+    envs = MujocoParser(**hparam).envs_train
+    print(envs)
+    envs.reset()
+    return envs
 
 
 def load_agent_and_env(hparam, device):
-    env = load_env(hparam, device)
+    env = load_env(hparam)
     method = hparam['method']
     if method == "method1":
         agent = Method1Gnn
@@ -77,25 +99,16 @@ def load_agent_and_env(hparam, device):
     else:
         raise ValueError(f"Method {method} not implemented")
 
-    from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
-    from torch_geometric.utils import degree
-
-    env_setup = MujocoParser(**hparam)
-    env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
-    edges = create_edges(env)
-    in_degree = degree(edges[1], num_nodes=num_nodes)
-    env.reset()
-    hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
     actor = FeedForward(device=device,
+                        in_dim=135,
                         out_dim=8,
-                        in_dim=env.num_limbs * env.limb_obs_size,
                         hidden_shape=hparam['network_shape'])
     # actor = agent(device=device,
     #               network_type='actor',
     #               **hparam)
     critic = FeedForward(device=device,
+                         in_dim=135,
                          out_dim=1,
-                         in_dim=env.num_limbs * env.limb_obs_size,
                          hidden_shape=hparam['network_shape'])
     return actor, critic, env
 
