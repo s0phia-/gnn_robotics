@@ -59,11 +59,20 @@ class PPO:
             rewards_history.append([int(iters), float(b_avg_reward)])
 
             # keep track of time!
-            t += len(b_obs)
+            t += self.batch_size
             iters += 1
 
             if self.normalize_advantage:  # need to decide where to normalize
                 b_advantages = (b_advantages - b_advantages.mean()) / (b_advantages.std() + 1e-8)
+
+            if self.anneal_lr:
+                frac = 1.0 - (t/self.batch_size - 1.0) / (self.total_timesteps // self.batch_size)
+                new_lr = frac * self.learning_rate
+                if self.opt_together:
+                    self.optimizer.param_groups[0]["lr"] = new_lr
+                else:
+                    self.actor_optim.param_groups[0]["lr"] = new_lr
+                    self.critic_optim.param_groups[0]["lr"] = new_lr
 
             for _ in range(self.update_epochs):
 
@@ -127,8 +136,10 @@ class PPO:
         batch_log_probs = []
         batch_values = []
         batch_ep_returns = []
+        batch_gae = []
+        batch_returns = []
         t = 0
-        while True:
+        while t < self.batch_size:
             obs, info = self.env.reset()
             ep_obs = []
             ep_dones = []
@@ -141,20 +152,29 @@ class PPO:
                 ep_rewards.append(reward)
                 ep_dones.append(terminated or truncated)
                 batch_actions.append(action)
-                batch_log_probs.append(log_prob.cpu().item())  # If log_prob is a scalar tensor
+                batch_log_probs.append(log_prob.cpu().item())
+                t += 1
                 if terminated or truncated:
-                    last_value = self.get_value(self.make_graph(obs, info)).detach()
                     batch_ep_returns.append(np.sum(ep_rewards))
+                    print(t)
                     break
+            if len(ep_rewards) <= 1:
+                continue
             batch_obs.extend(ep_obs)
             ep_obs = self.make_graph_batch(ep_obs)
             ep_values = self.get_value(ep_obs).detach()
+            print(f"ep_values shape: {ep_values.shape}")
             batch_values.extend(ep_values)
-            batch_gae, batch_returns = self.calculate_gae(ep_rewards, ep_values, ep_dones, last_value)
-            batch_obs = self.make_graph_batch(batch_obs)
-            batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float, device=self.device)
-            batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float, device=self.device)
-            return batch_obs, batch_actions, batch_log_probs, batch_gae, batch_returns, np.mean(batch_ep_returns)
+            last_value = self.get_value(self.make_graph(obs, info)).detach()
+            ep_gae, ep_returns = self.calculate_gae(ep_rewards, ep_values, ep_dones, last_value)
+            batch_gae.extend(ep_gae)
+            batch_returns.extend(ep_returns)
+        batch_obs = self.make_graph_batch(batch_obs)
+        batch_actions = torch.tensor(np.array(batch_actions), dtype=torch.float, device=self.device)
+        batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float, device=self.device)
+        batch_gae = torch.tensor(batch_gae, dtype=torch.float, device=self.device)
+        batch_returns = torch.tensor(batch_returns, dtype=torch.float, device=self.device)
+        return batch_obs, batch_actions, batch_log_probs, batch_gae, batch_returns, np.mean(batch_ep_returns)
 
     def calculate_gae(self, rewards, values, dones, last_value):
         rewards = torch.tensor(rewards, dtype=torch.float, device=self.device)

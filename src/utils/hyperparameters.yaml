@@ -1,19 +1,19 @@
 #env params
 env_name:
   - ant
-max_episodic_timesteps: 2048
-population_size: 1
+max_episodic_timesteps: 1000
 enable_features: True
 
 #PPO params
 learning_rate: 0.0003
+anneal_lr: True
 gamma: 0.99
-clip_value: 0.5
-update_epochs: 8
+clip_value: 0.2
+update_epochs: 10
 total_timesteps: 1000000
 mixed_precision: False
-grad_clip_value: 0.5
-batch_size: 8192
+grad_clip_value: 5
+batch_size: 2050
 normalize_advantage: True
 advantage_method: "gae"  # regular, gae
 gae_lambda: 0.95
@@ -21,10 +21,10 @@ opt_together: True  # set to true if actor and critic are separate networks that
 
 # GNN params
 method:
-  - method1
+#  - method1
 #  - method2
 #  - method5
-#  - NerveNet
+  - NerveNet
 propagation_steps:
   - 3
 #  - 4

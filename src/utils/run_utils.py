@@ -76,23 +76,9 @@ def load_agent_and_env(hparam, device):
         agent = GAT
     else:
         raise ValueError(f"Method {method} not implemented")
-
-    from src.environments.mujoco_parser import MujocoParser, create_edges, check_actuators
-    from torch_geometric.utils import degree
-
-    env_setup = MujocoParser(**hparam)
-    env, node_dim, num_nodes = env_setup.envs_train[0], env_setup.limb_obs_size, env_setup.num_nodes
-    edges = create_edges(env)
-    in_degree = degree(edges[1], num_nodes=num_nodes)
-    env.reset()
-    hparam['graph_info'] = {'edge_idx': edges, 'num_nodes': num_nodes, 'node_dim': node_dim}
-    actor = FeedForward(device=device,
-                        out_dim=8,
-                        in_dim=env.num_limbs * env.limb_obs_size,
-                        hidden_shape=hparam['network_shape'])
-    # actor = agent(device=device,
-    #               network_type='actor',
-    #               **hparam)
+    actor = agent(device=device,
+                  network_type='actor',
+                  **hparam)
     critic = FeedForward(device=device,
                          out_dim=1,
                          in_dim=env.num_limbs * env.limb_obs_size,
