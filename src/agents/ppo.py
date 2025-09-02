@@ -77,12 +77,6 @@ class PPO:
                 actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
                 critic_loss = nn.MSELoss()(b_returns.detach(), b_values)
 
-                print(f"b_values grad_fn: {b_values.grad_fn}")
-                print(f"actor_loss grad_fn: {actor_loss.grad_fn}")
-                print(f"b_values requires_grad: {b_values.requires_grad}")
-                print(f"new_log_probs requires_grad: {new_log_probs.requires_grad}")
-                print(f"b_log_probs requires_grad: {b_log_probs.requires_grad}")
-
                 if self.opt_together:
                     self.optimizer.zero_grad(set_to_none=True)
 
@@ -128,37 +122,29 @@ class PPO:
                  batch_rewards-to-gos: reward-to-go at each timestep
                  batch_lengths: length of each episode in batch
         """
-        batch_obs = np.empty([self.parallel_envs, self.batch_size], dtype=object)
-        batch_actions = np.empty([self.parallel_envs, self.batch_size], dtype=object)
-        batch_log_probs = np.empty([self.parallel_envs, self.batch_size], dtype=float)
-        batch_values = np.empty([self.parallel_envs, self.batch_size], dtype=float)
-        batch_ep_returns = np.empty([self.parallel_envs, self.batch_size], dtype=object)
-        timestep = 0
-
+        batch_obs = []
+        batch_actions = []
+        batch_log_probs = []
+        batch_values = []
+        batch_ep_returns = []
+        t = 0
         while True:
-            ep_timestep = 0
             obs, info = self.env.reset()
-            ep_obs = np.empty([self.parallel_envs, self.max_episodic_timesteps], dtype=object)
-            ep_dones = np.empty([self.parallel_envs, self.max_episodic_timesteps], dtype=object)
-            ep_rewards = np.empty([self.parallel_envs, self.max_episodic_timesteps], dtype=object)
-            ep_cum_rewards = np.empty([self.parallel_envs])
-            while timestep < self.batch_size:
+            ep_obs = []
+            ep_dones = []
+            ep_rewards = []
+            while t < self.batch_size:
                 graph = self.make_graph(obs, info)
-                ep_obs[np.arange(self.parallel_envs), ep_timestep] = graph
+                ep_obs.append(graph)
                 action, log_prob = self.get_action(graph, calculate_log_probs=True)
                 obs, reward, terminated, truncated, info = self.env.step(action)
-                done = terminated or truncated
-                ep_rewards[np.arange(self.parallel_envs), ep_timestep] = reward
-                ep_cum_rewards[np.arange(self.parallel_envs)] += reward
-                ep_dones[np.arange(self.parallel_envs), ep_timestep] = done
-                batch_actions[np.arange(self.parallel_envs), timestep] = action
-                batch_log_probs[np.arange(self.parallel_envs), timestep] = log_prob
-                timestep += 1
-                ep_timestep += 1
-                if done:
-                    last_value = self.get_value(self.make_graph_batch(self.make_graph(obs, info))).detach()
-                    batch_ep_returns[np.arange(self.parallel_envs), timestep] = ep_cum_rewards
-                    print(batch_ep_returns)
+                ep_rewards.append(reward)
+                ep_dones.append(terminated or truncated)
+                batch_actions.append(action)
+                batch_log_probs.append(log_prob.cpu().item())  # If log_prob is a scalar tensor
+                if terminated or truncated:
+                    last_value = self.get_value(self.make_graph(obs, info)).detach()
+                    batch_ep_returns.append(np.sum(ep_rewards))
                     break
             batch_obs.extend(ep_obs)
             ep_obs = self.make_graph_batch(ep_obs)
@@ -187,48 +173,23 @@ class PPO:
         returns = advantages + values
         return advantages.flatten(), returns.flatten()
 
-    def get_action(self, batch_obs, calculate_log_probs=True):
+    def get_action(self, obs, calculate_log_probs=False):
         """
-        find optimal action for given a list of observations
+        find optimal action for given observation.
         :param calculate_log_probs: whether to return the log probability of the action
         :param obs:observation to get action for
         :return: action, log probability of action (optional)
         """
-        actions = []
-        log_probs = [] if calculate_log_probs else None
+        mean_action = self.actor(obs)
+        cov_mat = torch.eye(len(mean_action), device=self.device) * 0.5
 
-        for obs in batch_obs:
-            mean_action = self.actor(obs)
-
-            cov_mat = torch.eye(len(mean_action), device=self.device) * 0.5
-            dist = MultivariateNormal(mean_action, cov_mat)
-            action = dist.sample()
-            action_cpu = action.cpu().detach().numpy()
-            actions.append(action_cpu)
-
-            if calculate_log_probs:
-                log_prob = dist.log_prob(action).cpu().detach().numpy()
-                log_probs.append(log_prob)
-
+        dist = MultivariateNormal(mean_action, cov_mat)
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+        action_cpu = action.cpu()
         if calculate_log_probs:
-            return actions, log_probs
-        return actions
-
-        # actions = []
-        # log_probs = [] if calculate_log_probs else None
-        # for mean_action in mean_actions:
-        #     print(obs)
-        #     cov_mat = torch.eye(len(mean_action), device=self.device) * 0.5
-        #     dist = MultivariateNormal(mean_action, cov_mat)
-        #     action = dist.sample()
-        #     action_cpu = action.cpu().detach.numpy()
-        #     actions.append(action_cpu)
-        #     if calculate_log_probs:
-        #         log_prob = dist.log_prob(action)
-        #         log_probs.append(log_prob)
-        # if calculate_log_probs:
-        #     return actions, log_probs
-        # return actions
+            return action_cpu.detach().numpy(), log_prob
+        return action_cpu.detach().numpy()
 
     def get_value(self, obs):
         """
@@ -252,16 +213,12 @@ class PPO:
         return log_probs
 
     def make_graph(self, obs, info):
-        graph_list = []
-        for _obs, _info in zip(obs, info):
-            num_nodes, edge_idx, mask = _info['num_nodes'], _info['edge_idx'], _info['mask']
-            node_dim = int(len(_obs) / num_nodes)
-            _obs = torch.tensor(_obs, dtype=torch.float32, device=self.device)
-            x = _obs.view(num_nodes, -1)
-            mask = torch.tensor(mask, dtype=torch.bool, device=self.device)
-            x = Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
-            graph_list.append(x)
-        return graph_list
+        num_nodes, edge_idx, mask = info['num_nodes'], info['edge_idx'], info['mask']
+        node_dim = int(len(obs) / num_nodes)
+        obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+        x = obs.view(num_nodes, -1)
+        mask = torch.tensor(mask, dtype=torch.bool, device=self.device)
+        return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
 
     @staticmethod
     def make_graph_batch(obs_batch):
