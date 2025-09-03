@@ -16,7 +16,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 if __name__ == '__main__':
     from src.utils import load_hparams
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=1)
+    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
     mp.set_start_method('spawn', force=True)
     mp.set_sharing_strategy('file_system')
 
@@ -29,5 +29,5 @@ if __name__ == '__main__':
             results = pool.map(run_worker, gpu_assignments)
     else:  # CPU
         print("CUDA not available, running on CPU")
-        with mp.Pool(processes=min(1, len(hparams))) as pool:
+        with mp.Pool(processes=min(5, len(hparams))) as pool:
             results = pool.map(run_worker, hparams)

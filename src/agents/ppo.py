@@ -142,6 +142,8 @@ class PPO:
         while t < self.batch_size:
             obs, info = self.env.reset()
             ep_obs = []
+            ep_actions = []
+            ep_log_probs = []
             ep_dones = []
             ep_rewards = []
             while t < self.batch_size:
@@ -151,19 +153,19 @@ class PPO:
                 obs, reward, terminated, truncated, info = self.env.step(action)
                 ep_rewards.append(reward)
                 ep_dones.append(terminated or truncated)
-                batch_actions.append(action)
-                batch_log_probs.append(log_prob.cpu().item())
+                ep_actions.append(action)
+                ep_log_probs.append(log_prob.cpu().item())
                 t += 1
                 if terminated or truncated:
                     batch_ep_returns.append(np.sum(ep_rewards))
-                    print(t)
                     break
             if len(ep_rewards) <= 1:
                 continue
             batch_obs.extend(ep_obs)
+            batch_actions.extend(ep_actions)
+            batch_log_probs.extend(ep_log_probs)
             ep_obs = self.make_graph_batch(ep_obs)
             ep_values = self.get_value(ep_obs).detach()
-            print(f"ep_values shape: {ep_values.shape}")
             batch_values.extend(ep_values)
             last_value = self.get_value(self.make_graph(obs, info)).detach()
             ep_gae, ep_returns = self.calculate_gae(ep_rewards, ep_values, ep_dones, last_value)
@@ -233,12 +235,12 @@ class PPO:
         return log_probs
 
     def make_graph(self, obs, info):
-        num_nodes, edge_idx, mask = info['num_nodes'], info['edge_idx'], info['mask']
+        num_nodes, edge_idx, edge_labels, mask = info['num_nodes'], info['edge_idx'], info['edge_labels'], info['mask']
         node_dim = int(len(obs) / num_nodes)
         obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
         x = obs.view(num_nodes, -1)
         mask = torch.tensor(mask, dtype=torch.bool, device=self.device)
-        return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
+        return Data(x=x, edge_index=edge_idx, edge_attr=edge_labels, mask=mask, num_nodes=num_nodes, node_dim=node_dim)
 
     @staticmethod
     def make_graph_batch(obs_batch):

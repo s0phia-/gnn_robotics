@@ -7,6 +7,7 @@ import xmltodict
 import os
 from gymnasium.envs.registration import register
 from stable_baselines3.common.vec_env import DummyVecEnv
+from torch_geometric.utils import dense_to_sparse
 import gymnasium as gym
 from shutil import copyfile
 import numpy as np
@@ -264,7 +265,7 @@ class ModularEnvWrapper(gym.Wrapper):
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
         self.num_nodes = num_nodes
-        self.edge_idx = create_edges(env)
+        self.edge_idx, self.edge_labels = create_edges(env)
         self.mask = check_actuators(env)
 
     def step(self, action):  # ordering introduced here
@@ -276,7 +277,7 @@ class ModularEnvWrapper(gym.Wrapper):
         terminated = torch.tensor([terminated], dtype=torch.bool).reshape(-1)
         truncated = torch.tensor([truncated], dtype=torch.bool).reshape(-1)
         reward = torch.tensor(reward, dtype=torch.float32).reshape(-1)
-        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask}
+        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask, 'edge_labels': self.edge_labels}
         return obs, reward, terminated, truncated, info
 
     def reset(self, seed=None, **kwargs):
@@ -290,11 +291,12 @@ class ModularEnvWrapper(gym.Wrapper):
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask}
+        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask, 'edge_labels': self.edge_labels}
         return obs, info
 
 
 def create_edges(env):
+    num_limbs = env.unwrapped.model.nbody - 1
     parent_list = get_graph_structure(env.unwrapped.xml)
     edges = []
     for i, j in enumerate(parent_list):
@@ -302,9 +304,17 @@ def create_edges(env):
             edges.append([i, j])
             edges.append([j, i])
     if edges:
-        return torch.tensor(edges, dtype=torch.long).t()
+        edges = torch.tensor(edges, dtype=torch.long).t()
     else:
-        return torch.zeros((2, 0), dtype=torch.long)
+        edges = torch.zeros((2, 0), dtype=torch.long)
+    morph_edges = edges
+    fc_edges, _ = dense_to_sparse(torch.ones(num_limbs, num_limbs))
+    edges, inverse_idx = torch.unique(torch.cat([fc_edges, morph_edges], dim=1), dim=1, return_inverse=True)
+
+    morph_labels = torch.zeros(fc_edges.shape[1]).scatter_(0, inverse_idx[fc_edges.shape[1]:], 1)
+    edge_labels = torch.stack([morph_labels, torch.ones_like(morph_labels)], dim=1)
+
+    return edges, edge_labels
 
 
 def check_actuators(env):
