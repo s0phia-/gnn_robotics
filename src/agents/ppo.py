@@ -58,15 +58,17 @@ class PPO:
             # Calculate the average reward per episode in this batch
             rewards_history.append([int(iters), float(b_avg_reward)])
 
-            # keep track of time!
-            t += self.batch_size
+            # keep track of time
+            batch_size = len(b_actions)
+            minibatch_size = int(batch_size // self.num_minibatches)
+            t += batch_size
             iters += 1
 
             if self.normalize_advantage:  # need to decide where to normalize
                 b_advantages = (b_advantages - b_advantages.mean()) / (b_advantages.std() + 1e-8)
 
             if self.anneal_lr:
-                frac = 1.0 - (t/self.batch_size - 1.0) / (self.total_timesteps // self.batch_size)
+                frac = 1.0 - (t/batch_size - 1.0) / (self.total_timesteps // batch_size)
                 new_lr = frac * self.learning_rate
                 if self.opt_together:
                     self.optimizer.param_groups[0]["lr"] = new_lr
@@ -74,49 +76,61 @@ class PPO:
                     self.actor_optim.param_groups[0]["lr"] = new_lr
                     self.critic_optim.param_groups[0]["lr"] = new_lr
 
+            batch_indices = np.arange(batch_size)
+
             for _ in range(self.update_epochs):
+                np.random.shuffle(batch_indices)
+                for start in range(0, batch_size, minibatch_size):
+                    end = start + minibatch_size
+                    mb_inds = batch_indices[start:end]
 
-                b_values = self.get_value(b_obs)
-                new_log_probs = self.get_action_log_probs(b_obs, b_actions)
-                log_ratio = new_log_probs - b_log_probs.detach()
-                action_prob_ratio = torch.exp(log_ratio)
+                    mb_advantages = b_advantages[mb_inds]
+                    mb_returns = b_returns[mb_inds]
+                    mb_actions = b_actions[mb_inds]
+                    mb_obs = self.sample_from_batch(b_obs, mb_inds)
+                    mb_log_probs = b_log_probs[mb_inds]
+                    mb_values = self.get_value(mb_obs)
 
-                # approx kl divergence
-                with torch.no_grad():
-                    approx_kl = ((action_prob_ratio - 1) - log_ratio).mean()
+                    new_log_probs = self.get_action_log_probs(mb_obs, mb_actions)
+                    log_ratio = new_log_probs - mb_log_probs.detach()
+                    action_prob_ratio = torch.exp(log_ratio)
 
-                # calculate losses
-                surr_loss_1 = action_prob_ratio * b_advantages
-                surr_loss_2 = torch.clamp(action_prob_ratio, 1-self.clip_value, 1+self.clip_value) * b_advantages
-                actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
-                critic_loss = nn.MSELoss()(b_returns.detach(), b_values)
+                    # approx kl divergence
+                    with torch.no_grad():
+                        approx_kl = ((action_prob_ratio - 1) - log_ratio).mean()
 
-                if self.opt_together:
-                    self.optimizer.zero_grad(set_to_none=True)
+                    # calculate losses
+                    surr_loss_1 = action_prob_ratio * mb_advantages
+                    surr_loss_2 = torch.clamp(action_prob_ratio, 1-self.clip_value, 1+self.clip_value) * mb_advantages
+                    actor_loss = (-torch.min(surr_loss_1, surr_loss_2)).mean()
+                    critic_loss = nn.MSELoss()(mb_returns.detach(), mb_values)
 
-                    self.scaler.scale(actor_loss + critic_loss).backward()
-                    if self.grad_clip_value > 0:
-                        self.scaler.unscale_(self.optimizer)
-                        nn.utils.clip_grad_norm_(itertools.chain(self.actor.parameters(),
-                                                                 self.critic.parameters()), self.grad_clip_value)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
-                    self.actor_optim.zero_grad(set_to_none=True)
-                    actor_loss.backward()
-                    if self.grad_clip_value > 0:
-                        nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_value)
-                    self.scaler.step(self.actor_optim)
+                    if self.opt_together:
+                        self.optimizer.zero_grad(set_to_none=True)
 
-                    if self.actor is not self.critic:
-                        self.critic_optim.zero_grad(set_to_none=True)
-                        critic_loss.backward()
+                        self.scaler.scale(actor_loss + critic_loss).backward()
                         if self.grad_clip_value > 0:
-                            nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip_value)
-                        self.scaler.step(self.critic_optim)
+                            self.scaler.unscale_(self.optimizer)
+                            nn.utils.clip_grad_norm_(itertools.chain(self.actor.parameters(),
+                                                                     self.critic.parameters()), self.grad_clip_value)
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                    else:
+                        self.actor_optim.zero_grad(set_to_none=True)
+                        actor_loss.backward()
+                        if self.grad_clip_value > 0:
+                            nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_value)
+                        self.scaler.step(self.actor_optim)
 
-            if self.target_kl is not None and approx_kl > self.target_kl:
-                break
+                        if self.actor is not self.critic:
+                            self.critic_optim.zero_grad(set_to_none=True)
+                            critic_loss.backward()
+                            if self.grad_clip_value > 0:
+                                nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip_value)
+                            self.scaler.step(self.critic_optim)
+
+                if self.target_kl is not None and approx_kl > self.target_kl:
+                    break
 
             self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
@@ -253,6 +267,12 @@ class PPO:
     @staticmethod
     def make_graph_batch(obs_batch):
         return Batch.from_data_list(obs_batch)
+
+    @staticmethod
+    def sample_from_batch(batch, indices):
+        batch = batch.to_data_list()
+        sample = [batch[i] for i in indices]
+        return Batch.from_data_list(sample)
 
     def load_actor(self, actor_path, device):
         self.actor.load_state_dict(torch.load(actor_path, map_location=device))

@@ -14,7 +14,8 @@ total_timesteps: 1000000
 mixed_precision: False
 grad_clip_value: 5
 target_kl: 0.04
-batch_size: 2050
+batch_size: 2000
+num_minibatches: 1
 normalize_advantage: True
 advantage_method: "gae"  # regular, gae
 gae_lambda: 0.95
@@ -25,16 +26,16 @@ method:
 #  - method1
 #  - method2
 #  - method5
-#  - NerveNet
-  - GAT
+  - NerveNet
+#  - GAT
 propagation_steps:
   - 3
-  - 4
+#  - 4
 #  - 5
 #  - 6
 node_hidden_size:
   - 32
-  - 64
+#  - 64
 #  - 128
 network_shape:
 #  - [64,64]
@@ -44,7 +45,7 @@ network_shape:
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
   - 64
-  - 128
+#  - 128
 #  - 256
 
 #misc params
