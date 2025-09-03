@@ -13,6 +13,7 @@ update_epochs: 10
 total_timesteps: 1000000
 mixed_precision: False
 grad_clip_value: 5
+target_kl: 0.04
 batch_size: 2050
 normalize_advantage: True
 advantage_method: "gae"  # regular, gae

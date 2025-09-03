@@ -78,7 +78,12 @@ class PPO:
 
                 b_values = self.get_value(b_obs)
                 new_log_probs = self.get_action_log_probs(b_obs, b_actions)
-                action_prob_ratio = torch.exp(new_log_probs - b_log_probs.detach())
+                log_ratio = new_log_probs - b_log_probs.detach()
+                action_prob_ratio = torch.exp(log_ratio)
+
+                # approx kl divergence
+                with torch.no_grad():
+                    approx_kl = ((action_prob_ratio - 1) - log_ratio).mean()
 
                 # calculate losses
                 surr_loss_1 = action_prob_ratio * b_advantages
@@ -109,6 +114,9 @@ class PPO:
                         if self.grad_clip_value > 0:
                             nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip_value)
                         self.scaler.step(self.critic_optim)
+
+            if self.target_kl is not None and approx_kl > self.target_kl:
+                break
 
             self.logger.info("Iteration {} loss {}.".format(iters, critic_loss.item()))
             if iters % self.save_model_freq == 0:
