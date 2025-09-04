@@ -61,10 +61,21 @@
                     <joint armature="0.0028" axis="0 -1 0" name="right_elbow" pos="0 0 0" range="-90 50" stiffness="0" type="hinge"/>
                     <geom fromto="0.01 0.01 0.01 .17 .17 .17" name="right_larm" size="0.031" type="capsule"/>
 
-                    <!-- Separate hand body for tool attachment -->
+                    <!-- Hand body with wrist joint -->
                     <body name="right_hand_body" pos=".18 .18 .18">
                         <geom name="right_hand" pos="0 0 0" size="0.04" type="sphere"/>
-                        <site name="tool_attach_site" pos="0 0 0" size="0.01" rgba="1 0 0 0.5"/>
+
+                        <!-- Wrist joint for tool control -->
+                        <body name="right_wrist" pos="0 0 0">
+                            <joint name="right_wrist_rotation" type="hinge" axis="0 0 1"
+                                   range="-180 180" armature="0.001" damping="0.1"/>
+
+                            <!-- Small invisible geom to provide mass -->
+                            <geom name="wrist_mass" type="sphere" size="0.005"
+                                  rgba="0 0 0 0" mass="0.01" contype="0" conaffinity="0"/>
+
+                            <site name="tool_attach_site" pos="0 0 0" size="0.01" rgba="1 0 0 0.5"/>
+                        </body>
                     </body>
 
                     <camera pos="0 0 0"/>
@@ -84,11 +95,12 @@
     </worldbody>
 
     <equality>
-        <weld name="tool_constraint" body1="right_hand_body" body2="tool"
+        <weld name="tool_constraint" body1="right_wrist" body2="tool"
               relpose="0 0 -0.15 1 0 0 0" solimp="0.9 0.95 0.001" solref="0.02 1" active="false"/>
     </equality>
 
     <actuator>
+        <!-- Original humanoid actuators -->
         <motor gear="150" joint="right_hip_y" name="right_hip_y"/>
         <motor gear="100" joint="right_knee" name="right_knee"/>
         <motor gear="150" joint="left_hip_y" name="left_hip_y"/>
@@ -97,5 +109,9 @@
         <motor gear="12.5" joint="right_elbow" name="right_elbow"/>
         <motor gear="12.5" joint="left_shoulder1" name="left_shoulder1"/>
         <motor gear="12.5" joint="left_elbow" name="left_elbow"/>
+
+        <!-- Wrist actuator (only active when tool is equipped) -->
+        <motor gear="5" joint="right_wrist_rotation" name="right_wrist"
+               ctrllimited="false" ctrlrange="-1 1"/>
     </actuator>
 </mujoco>
