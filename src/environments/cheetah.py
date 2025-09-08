@@ -59,46 +59,51 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         this function loops through numbers 1...num_joints, gets features, and concatenates them together in that order.
         """
 
-        def _get_obs_per_limb(body_id):
-            # Get the torso position
+        def _get_obs_per_limb(b):
+            if 'hip' in b:
+                limb_type_vec = np.array((1, 0, 0, 0))
+            elif 'knee' in b:
+                limb_type_vec = np.array((0, 1, 0, 0))
+            elif 'shoulder' in b:
+                limb_type_vec = np.array((0, 0, 1, 0))
+            elif 'elbow' in b:
+                limb_type_vec = np.array((0, 0, 0, 1))
+            else:
+                limb_type_vec = np.array((0, 0, 0, 0))
+
             torso_id = self.data.body("torso").id
             torso_x_pos = self.data.xpos[torso_id][0]
-
-            # Get body position
+            body_id = self.data.body(b).id
             xpos = self.data.xpos[body_id].copy()
             xpos[0] -= torso_x_pos
 
-            # Get quaternion and convert to expmap
             q = self.data.xquat[body_id]
             expmap = quat2expmap(q)
 
-            # Get velocities
             xvelp = np.clip(self.data.cvel[body_id][:3], -10, 10)  # Linear velocity
             xvelr = self.data.cvel[body_id][3:]  # Angular velocity
 
-            obs = np.concatenate([xpos, xvelp, xvelr, expmap])
+            obs = np.concatenate([xpos, xvelp, xvelr, expmap, limb_type_vec])
 
-            # Include current joint angle and joint range as input
+            # include current joint angle and joint range as input
             if body_id == torso_id:
                 angle = 0.
                 joint_range = [0., 0.]
             else:
                 jnt_adr = self.model.body_jntadr[body_id]
                 qpos_adr = self.model.jnt_qposadr[jnt_adr]  # Assuming each body has only one joint
-                angle = np.degrees(self.data.qpos[qpos_adr])  # Angle of current joint, scalar
-                joint_range = np.degrees(self.model.jnt_range[jnt_adr])  # Range of current joint, (2,)
-
-                # Normalize
+                angle = np.degrees(self.data.qpos[qpos_adr])  # angle of current joint, scalar
+                joint_range = np.degrees(self.model.jnt_range[jnt_adr])  # range of current joint, (2,)
+                # normalize
                 angle = (angle - joint_range[0]) / (joint_range[1] - joint_range[0])
                 joint_range[0] = (180. + joint_range[0]) / 360.
                 joint_range[1] = (180. + joint_range[1]) / 360.
-
             obs = np.concatenate([obs, [angle], joint_range])
             return obs
 
-        # Skip body 0 (world) and collect observations for all other bodies
-        full_obs = np.concatenate([_get_obs_per_limb(i) for i in range(1, self.model.nbody)])
-        return full_obs.ravel().astype(np.float32)
+        full_obs = np.concatenate([_get_obs_per_limb(i) for i in ['bfoot', 'bshin', 'bthigh', 'ffoot', 'fshin',
+                                                                  'fthigh', 'torso']])
+        return full_obs.ravel()
 
     def reset_model(self):
         self.set_state(
