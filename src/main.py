@@ -29,5 +29,5 @@ if __name__ == '__main__':
             results = pool.map(run_worker, gpu_assignments)
     else:  # CPU
         print("CUDA not available, running on CPU")
-        with mp.Pool(processes=min(5, len(hparams))) as pool:
+        with mp.Pool(processes=min(1, len(hparams))) as pool:
             results = pool.map(run_worker, hparams)
