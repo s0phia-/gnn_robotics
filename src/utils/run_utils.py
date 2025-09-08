@@ -5,7 +5,8 @@ import yaml
 import itertools
 from copy import deepcopy
 from src.utils.logger_config import get_logger
-from src.agents import PPO, Method1Gnn, Method2Gnn, NerveNet, EGAT, GAT, FeedForward
+from src.agents import (PPO, Method1Gnn, Method2Gnn, NerveNet, FeedForward, GATTwoEdgeTypes, GATMorphology,
+                        GATFullyConnected)
 
 
 def load_hparams(yaml_hparam_path, num_seeds=5):
@@ -70,15 +71,25 @@ def load_agent_and_env(hparam, device):
         agent = Method2Gnn
     elif method == "NerveNet":
         agent = NerveNet
-    elif method == "EGAT":
-        agent = EGAT
-    elif method == "GAT":
-        agent = GAT
+    elif method == "GATTwoEdgeTypes":
+        agent = GATTwoEdgeTypes
+    elif method == "GATMorphology":
+        agent = GATMorphology
+    elif method == "GATFullyConnected":
+        agent = GATFullyConnected
+    elif method == "FeedForward":
+        agent = FeedForward(device=device,
+                            out_dim=env.num_limbs - 1,
+                            in_dim=env.num_limbs * env.limb_obs_size,
+                            hidden_shape=hparam['network_shape'])
     else:
         raise ValueError(f"Method {method} not implemented")
-    actor = agent(device=device,
-                  network_type='actor',
-                  **hparam)
+    if method == "FeedForward":
+        actor = agent
+    else:
+        actor = agent(device=device,
+                      network_type='actor',
+                      **hparam)
     critic = FeedForward(device=device,
                          out_dim=1,
                          in_dim=env.num_limbs * env.limb_obs_size,

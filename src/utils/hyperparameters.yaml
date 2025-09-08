@@ -1,6 +1,6 @@
 #env params
 env_name:
-  - ant
+  - cheetah
 max_episodic_timesteps: 1000
 enable_features: True
 
@@ -26,8 +26,11 @@ method:
 #  - method1
 #  - method2
 #  - method5
-  - NerveNet
-  - GAT
+#  - NerveNet
+#  - FeedForward
+  - GATTwoEdgeTypes
+  - GATMorphology
+  - GATFullyConnected
 propagation_steps:
   - 3
   - 4
@@ -36,7 +39,7 @@ propagation_steps:
 node_hidden_size:
   - 32
   - 64
-#  - 128
+  - 128
 network_shape:
 #  - [64,64]
   - [128,128]
@@ -44,8 +47,8 @@ network_shape:
   - [64,64,64]
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
-  - 64
-  - 128
+#  - 64
+#  - 128
 #  - 256
 
 #misc params
@@ -57,6 +60,6 @@ save_model_freq: 10
 #paths
 xml_path: 'environments/assets'
 env_dir: './environments'
-base_modular_env_path: './environments/ModularEnv.py'
+base_modular_env_path: './environments/modular_env.py'
 data_dir: './results'
 load_run_path: null
