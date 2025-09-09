@@ -42,9 +42,10 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         posbefore = self.data.qpos[0]
         self.do_simulation(a, self.frame_skip)
         posafter = self.data.qpos[0]
+        alive_bonus = 1.0
         reward_ctrl = - 0.1 * np.square(a).sum()
         reward_run = (posafter - posbefore) / self.dt
-        reward = reward_ctrl + reward_run
+        reward = reward_ctrl + reward_run + alive_bonus
         terminated = False
         truncated = False
         ob = self._get_obs()
@@ -60,13 +61,13 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         """
 
         def _get_obs_per_limb(b):
-            if 'hip' in b:
+            if b == 'torso':
                 limb_type_vec = np.array((1, 0, 0, 0))
-            elif 'knee' in b:
+            elif 'thigh' in b:
                 limb_type_vec = np.array((0, 1, 0, 0))
-            elif 'shoulder' in b:
+            elif 'shin' in b:
                 limb_type_vec = np.array((0, 0, 1, 0))
-            elif 'elbow' in b:
+            elif 'foot' in b:
                 limb_type_vec = np.array((0, 0, 0, 1))
             else:
                 limb_type_vec = np.array((0, 0, 0, 0))
