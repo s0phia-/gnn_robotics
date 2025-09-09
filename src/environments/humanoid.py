@@ -107,8 +107,9 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             obs = np.concatenate([obs, [angle], joint_range])
             return obs
 
-        # Skip body 0 (world) and collect observations for all other bodies
-        full_obs = np.concatenate([_get_obs_per_limb(i) for i in range(1, self.model.nbody)])
+        full_obs = np.concatenate([_get_obs_per_limb(i) for i in ['left_lower_arm', 'left_shin', 'left_thigh',
+                                                                  'left_upper_arm', 'right_lower_arm', 'right_shin',
+                                                                  'right_thigh', 'right_upper_arm', 'torso']])
         return full_obs.ravel().astype(np.float32)
 
     def reset_model(self):
