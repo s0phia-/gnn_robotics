@@ -100,6 +100,10 @@ def load_agent_and_env(hparam, device):
 def run_worker(args):
     """Worker function that handles both GPU and CPU cases"""
     import torch
+    os.environ['OMP_NUM_THREADS'] = '2'  # OpenMP threads
+    os.environ['MKL_NUM_THREADS'] = '2'  # Intel MKL threads
+    os.environ['NUMEXPR_NUM_THREADS'] = '2'  # NumExpr threads
+    torch.set_num_threads(2)  # PyTorch threads
     if len(args) == 2:  # GPU
         hparam, gpu_id = args
         device = torch.device(f'cuda:{gpu_id}')
