@@ -7,6 +7,7 @@ import xmltodict
 import os
 from gymnasium.envs.registration import register
 from stable_baselines3.common.vec_env import DummyVecEnv
+from torch_geometric.utils import dense_to_sparse
 import gymnasium as gym
 from shutil import copyfile
 import numpy as np
@@ -40,7 +41,7 @@ class MujocoParser:
 
         # create vectorized training env
         obs_max_len = max([len(self.morph_graphs[env_name]) for env_name in envs_train_names]) * self.limb_obs_size
-        self.envs_train = [self.make_env_wrapper(name, obs_max_len, self.seed) for name in envs_train_names]
+        self.envs_train = [self.make_env_wrapper(name, obs_max_len, self.seed, self.num_nodes) for name in envs_train_names]
 
         # self.envs_train = DummyVecEnv(envs_train)  # vectorized env (necessary for multiprocessing)
 
@@ -88,8 +89,7 @@ class MujocoParser:
             if not os.path.exists(os.path.join(self.env_dir, '{}.py'.format(env_name))):
                 # create a duplicate of gym environment file for each env (necessary for avoiding bug in gym)
                 copyfile(self.base_modular_env_path, '{}.py'.format(os.path.join(self.env_dir, env_name)))
-            params = {'xml': os.path.abspath(xml),
-                      'idx': self.env_mapping[env_name]}
+            params = {'xml': os.path.abspath(xml)}
             # register with gym (check how it works)
 
             print(f"env registry params:")
@@ -116,11 +116,11 @@ class MujocoParser:
         return max_children
 
     @staticmethod
-    def make_env_wrapper(env_name, obs_max_len=None, seed=0):
+    def make_env_wrapper(env_name, obs_max_len=None, seed=0, num_nodes=None):
         """return wrapped gym environment for parallel sample collection (vectorized environments)"""
         e = gym.make("src.environments:%s-v0" % env_name, seed=seed, render_mode='human')
         e.reset()
-        e = ModularEnvWrapper(e, obs_max_len)
+        e = ModularEnvWrapper(e, obs_max_len, num_nodes)
         return e
 
 
@@ -251,7 +251,7 @@ class ModularEnvWrapper(gym.Wrapper):
     Also match the order of the actions returned by modular policy to the order of the environment actions
     """
 
-    def __init__(self, env, obs_max_len=None):
+    def __init__(self, env, obs_max_len=None, num_nodes=None):
         super(ModularEnvWrapper, self).__init__(env)
         # if no max length specified for obs, use the current env's obs size
         if obs_max_len:
@@ -262,10 +262,11 @@ class ModularEnvWrapper(gym.Wrapper):
         self.num_limbs = self.env.unwrapped.model.nbody - 1
         self.limb_obs_size = self.env.observation_space.shape[0] // self.num_limbs
         self.max_action = float(self.env.action_space.high[0])
-
         self.xml = self.env.unwrapped.xml
         self.model = env.unwrapped.model
-        self.edge_index = create_edges(self, torch.device('cpu'))
+        self.num_nodes = num_nodes
+        self.edge_idx, self.edge_labels = create_edges(env)
+        self.mask = check_actuators(env)
 
     def step(self, action):  # ordering introduced here
         action = action[:self.num_limbs]  # clip the 0-padding before processing
@@ -273,10 +274,10 @@ class ModularEnvWrapper(gym.Wrapper):
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
         terminated = torch.tensor([terminated], dtype=torch.bool).reshape(-1)
         truncated = torch.tensor([truncated], dtype=torch.bool).reshape(-1)
         reward = torch.tensor(reward, dtype=torch.float32).reshape(-1)
+        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask, 'edge_labels': self.edge_labels}
         return obs, reward, terminated, truncated, info
 
     def reset(self, seed=None, **kwargs):
@@ -287,15 +288,15 @@ class ModularEnvWrapper(gym.Wrapper):
             obs, info = self.env.reset(seed=seed)
         else:
             obs, info = self.env.reset()
-
         assert len(obs) <= self.obs_max_len, "env's obs has length {}, which exceeds initiated obs_max_len {}".format(
             len(obs), self.obs_max_len)
         obs = np.append(obs, np.zeros((self.obs_max_len - len(obs))))
-        obs = torch.tensor(np.concatenate([obs, [self.env.unwrapped.idx]]), dtype=torch.float32)
+        info = {'num_nodes': self.num_nodes, 'edge_idx': self.edge_idx, 'mask': self.mask, 'edge_labels': self.edge_labels}
         return obs, info
 
 
-def create_edges(env, device):
+def create_edges(env):
+    num_limbs = env.unwrapped.model.nbody - 1
     parent_list = get_graph_structure(env.unwrapped.xml)
     edges = []
     for i, j in enumerate(parent_list):
@@ -303,9 +304,17 @@ def create_edges(env, device):
             edges.append([i, j])
             edges.append([j, i])
     if edges:
-        return torch.tensor(edges, dtype=torch.long, device=device).t()
+        edges = torch.tensor(edges, dtype=torch.long).t()
     else:
-        return torch.zeros((2, 0), dtype=torch.long, device=device)
+        edges = torch.zeros((2, 0), dtype=torch.long)
+    morph_edges = edges
+    fc_edges, _ = dense_to_sparse(torch.ones(num_limbs, num_limbs))
+    edges, inverse_idx = torch.unique(torch.cat([fc_edges, morph_edges], dim=1), dim=1, return_inverse=True)
+
+    morph_labels = torch.zeros(fc_edges.shape[1]).scatter_(0, inverse_idx[fc_edges.shape[1]:], 1)
+    edge_labels = torch.stack([morph_labels, torch.ones_like(morph_labels)], dim=1)
+
+    return edges, edge_labels
 
 
 def check_actuators(env):

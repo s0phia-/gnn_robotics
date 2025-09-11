@@ -1,32 +1,37 @@
 import torch
-import numpy as np
+from torch_scatter import scatter_mean
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops
-from torch_geometric.data import Data, Batch
-from skrl.models.torch import Model, GaussianMixin, DeterministicMixin
-from collections import namedtuple
+from torch_geometric.data import Data
 
 
 class Encoder(nn.Module):
     def __init__(self,
-                 in_dim: int,
                  hidden_dim: int,
                  device: torch.device):
         """
         An encoder network, part one of the NerveNet Message Passing GNN architecture.
-        :param in_dim:
         :param hidden_dim:
         :param device:
         """
         super().__init__()
-        self.layers = [nn.Linear(in_dim, hidden_dim, device=device), nn.Tanh()]
-        self.layers = nn.Sequential(*self.layers)
+        self.device = device
+        self.hidden_dim = hidden_dim
+        self._layers = {}
 
-    def forward(self, x: torch.Tensor):
-        if isinstance(x, np.ndarray):
-            x = torch.tensor(x, dtype=torch.float)
-        return self.layers(x)
+    def _get_layer(self, in_dim: int):
+        if in_dim not in self._layers:
+            layer = nn.Linear(in_dim, self.hidden_dim, device=self.device)
+            for param in layer.parameters():
+                param.requires_grad = False
+            self._layers[in_dim] = [layer, nn.Tanh()]
+        return self._layers[in_dim]
+
+    def forward(self, x: torch.Tensor, in_dim: int) -> torch.Tensor:
+        layers = self._get_layer(in_dim)
+        layers = nn.Sequential(*layers)
+        return layers(x)
 
 
 class Gnnlayer(MessagePassing):
@@ -38,29 +43,37 @@ class Gnnlayer(MessagePassing):
                  aggregator_type: str = 'mean'):
         """
         Message passing graph neural network, used between an encoder and decoder in NerveNet.
-        :param message_hidden_layers:
-        :param message_hidden_dim:
-        :param update_hidden_layers:
-        :param update_hidden_dim:
+        :param in_dim:
+        :param out_dim:
+        :param hidden_shape:
         :param device:
+        :param aggregator_type:
         """
         super().__init__(aggr=aggregator_type)
         self.device = device
-
         # construct message function
         self.message_function = self._build_mlp(in_dim * 2, hidden_shape, out_dim, device)
-
         # construct update function
         self.update_function = nn.GRUCell(input_size=out_dim, hidden_size=out_dim, device=device)
 
-    @staticmethod
-    def _build_mlp(in_dim, hidden_shape, out_dim, device):
+    def _build_mlp(self, in_dim, hidden_shape, out_dim, device):
         layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
         for i in range(len(hidden_shape) - 1):
             layers.append(nn.Linear(hidden_shape[i], hidden_shape[i+1], device=device))
             layers.append(nn.Tanh())
         layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
-        return nn.Sequential(*layers)
+        network_layers = nn.Sequential(*layers)
+        # self._init_weights(network_layers)
+        return network_layers
+
+    @staticmethod
+    def _init_weights(network_layers, method="orthogonal"):
+        if method == "orthogonal":
+            init_ftn = nn.init.orthogonal_
+        for layer in network_layers:
+            if isinstance(layer, nn.Linear):
+                init_ftn(layer.weight)
+                nn.init.zeros_(layer.bias)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor):
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
@@ -79,151 +92,101 @@ class Decoder(nn.Module):
                  in_dim: int,
                  out_dim: int,
                  hidden_shape: list,
-                 device: torch.device):
+                 device: torch.device,
+                 network_type: str = 'actor'):
         """
         A decoder network, part four of the NerveNet Message Passing GNN architecture.
+        :param in_dim:
         :param out_dim:
-        :param hidden_dim:
-        :param hidden_layers:
+        :param hidden_shape:
         :param device:
         """
         super().__init__()
+        self.network_type = network_type
+        self.actor_layers = self._build_mlp(in_dim, hidden_shape, out_dim, device)
+        self.critic_layers = self._build_mlp(in_dim, hidden_shape, 1, device)
 
-        self.layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
+    def _build_mlp(self, in_dim, hidden_shape, out_dim, device):
+        layers = [nn.Linear(in_dim, hidden_shape[0], device=device), nn.Tanh()]
         for i in range(len(hidden_shape) - 1):
-            self.layers.append(nn.Linear(hidden_shape[i], hidden_shape[i + 1], device=device))
-            self.layers.append(nn.Tanh())
-        self.layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
-        self.layers = nn.Sequential(*self.layers)
+            layers.append(nn.Linear(hidden_shape[i], hidden_shape[i+1], device=device))
+            layers.append(nn.Tanh())
+        layers.append(nn.Linear(hidden_shape[-1], out_dim, device=device))
+        layers = nn.Sequential(*layers)
+        # self._init_weights(layers)
+        return layers
 
-    def forward(self, x: torch.Tensor):
-        if isinstance(x, np.ndarray):
-            x = torch.tensor(x, dtype=torch.float)
-        return self.layers(x)
+    @staticmethod
+    def _init_weights(network_layers, method="orthogonal"):
+        if method == "orthogonal":
+            init_ftn = nn.init.orthogonal_
+        for layer in network_layers:
+            if isinstance(layer, nn.Linear):
+                init_ftn(layer.weight)
+                nn.init.zeros_(layer.bias)
+
+    def forward(self, x: torch.Tensor, mask, batch, batch_size):
+        if self.network_type == 'actor':
+            return self.forward_actor(x, batch_size=batch_size, mask=mask)
+        else:
+            return self.forward_critic(x, batch=batch)
+
+    def forward_actor(self, x: torch.Tensor, batch_size, mask):
+        x = self.actor_layers(x)
+        x = x[mask]
+        x = x.view(batch_size, -1)
+        if batch_size == 1:
+            x = x.squeeze()
+        return x
+
+    def forward_critic(self, x: torch.Tensor, batch=None):
+        output = self.critic_layers(x)
+        if batch is None:
+            return output.mean(dim=0)
+        else:
+            return scatter_mean(output, batch, dim=0)
 
 
 class MessagePassingGNN(nn.Module):
     def __init__(self,
-                 in_dim: int,
-                 action_dim: int,
                  device: torch.device,
+                 network_type: str,
                  **kwargs
                  ):
         """
         Message passing GNN architecture.
         see https://openreview.net/forum?id=S1sqHMZCb
-        :param in_dim: dimensions of input to network
-        :param out_dim: dimensions of output of network
+        :param device:
         """
         nn.Module.__init__(self)
         self.__dict__.update((k, v) for k, v in kwargs.items())
-        self.node_feature_dim = in_dim
         self.device = device
-
-        self.encoder = Encoder(in_dim=in_dim,
-                               hidden_dim=self.node_hidden_size,
+        self.encoder = Encoder(hidden_dim=self.node_hidden_size,
                                device=device).to(device)
-
         self.middle = nn.ModuleList()
         for _ in range(self.propagation_steps):
             self.middle.append(Gnnlayer(in_dim=self.node_hidden_size,
                                         out_dim=self.node_hidden_size,
                                         hidden_shape=self.network_shape,
                                         device=device))
-
-        self.decoder = Decoder(out_dim=action_dim,
-                               in_dim=self.node_hidden_size,
+        self.decoder = Decoder(in_dim=self.node_hidden_size,
+                               out_dim=1,
                                hidden_shape=self.network_shape,
+                               network_type=network_type,
                                device=device).to(device)
 
-    def make_graph(self, obs):
-        """
-        make a pyg graph
-        """
-        env_idx = int(obs[-1])
-        obs = obs[:-1]
-        graph_data = getattr(self, f"graph_info_{env_idx}", None)
-        num_nodes = graph_data['num_nodes']
-        edge_idx = graph_data['edge_idx']
-        actuator_mask = graph_data['actuator_mask']
-
-        x = obs.view(num_nodes, -1)
-        mask = torch.tensor(actuator_mask, dtype=torch.bool)
-        return Data(x=x, edge_index=edge_idx, mask=mask, num_nodes=num_nodes)
-
-    def make_graph_batch(self, obs_batch):
-        data_list = []
-        for obs in obs_batch:
-            graph = self.make_graph(obs)
-            data_list.append(graph)
-        return Batch.from_data_list(data_list)
-
-    def forward(self, data):
-        if isinstance(data, Data):  # if a pytorch geometric object
-            x, edge_index = data.x, data.edge_index
-            batch = data.batch
-        else:  # assume np array or torch tensor
-            data = torch.tensor(data, dtype=torch.float, device=self.device)
-            if data.dim() == 1:  # single observation
-                data = self.make_graph(data)
-                x, edge_index, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
-                batch = None
-            else:  # Batch of observations
-                data = self.make_graph_batch(data)
-                x, edge_index, mask, num_nodes = data.x, data.edge_index, data.mask, data.num_nodes
-                batch = data.batch
-
-        x = self.encoder(x=x)
-
+    def forward(self, data: Data):
+        x, edge_index, mask, num_nodes, batch, node_dim = (data.x, data.edge_index, data.mask, data.num_nodes,
+                                                           data.batch, data.node_dim)
+        if batch is None:  # not a batch
+            batch_size = 1
+            x = self.encoder(x=x, in_dim=node_dim)
+        else:  # a batch
+            batch_size = batch.max().item() + 1
+            x = self.encoder(x, node_dim[0].item())
         for i in range(self.propagation_steps):
             x = self.middle[i](x=x, edge_index=edge_index)
-
-        x = self.decoder(x=x)
-
+        x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
-        if batch is not None:
-            x = x[mask]
-            batch_size = batch.max().item() + 1
-            x = x.view(batch_size, -1)
-            return x
-
-        else:
-            x = x.view(-1, self.num_nodes)
-            x = x.squeeze(0)
-            x = x[mask]
-            return x
-
-
-class SkrlNerveNet(GaussianMixin, DeterministicMixin, Model):
-    def __init__(self,
-                 observation_space,
-                 action_space,
-                 node_dim,
-                 device,
-                 clip_actions=False,
-                 clip_log_std=True,
-                 min_log_std=-20,
-                 max_log_std=2,
-                 reduction="sum",
-                 **kwargs):
-        Model.__init__(self, observation_space, action_space, device)
-        GaussianMixin.__init__(self, clip_actions, clip_log_std, min_log_std, max_log_std, reduction)
-        DeterministicMixin.__init__(self, clip_actions)
-
-        self.policy_network = MessagePassingGNN(in_dim=node_dim,
-                                                action_dim=1,
-                                                device=device,
-                                                ** {k: v for k, v in kwargs.items() if k not in
-                                                    ['in_dim', 'num_nodes', 'mask']},)
-        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions))
-
-    def act(self, inputs, role):
-        if role == "policy":
-            return GaussianMixin.act(self, inputs, role)
-
-    def compute(self, inputs, role):
-        inputs = inputs["states"]
-        if role == "policy":
-            return self.policy_network(inputs), self.log_std_parameter, {}
+        return x

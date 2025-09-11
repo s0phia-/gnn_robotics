@@ -1,13 +1,8 @@
-#!/usr/bin/env python2
-# -----------------------------------------------------------------------------
-#   @brief:
-#       Several Walkers
-#   @author:
-#       Tingwu (Wilson) Wang, Nov. 22nd, 2017
-# -----------------------------------------------------------------------------
+########################################################
+### edited from https://github.com/tommasomarzi/fgrl ###
+########################################################
 
 import numpy as np
-import os
 from gymnasium import utils
 from gymnasium.envs.mujoco import mujoco_env
 from src.environments.mujoco_parser import quat2expmap
@@ -19,56 +14,68 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         "render_modes": ["human", "rgb_array", "depth_array"],
         # "render_fps": 25,
     }
-    def __init__(self, xml, idx, seed=None, **kwargs):
+
+    def __init__(self, xml, seed=None, **kwargs):
+        print(f"HERE: self.metadata: {self.metadata}")
         self.xml = xml
-        self.idx = idx
+        self.num_nodes, self.edge_idx, self.mask = None, None, None
+
         render_mode = kwargs.get('render_mode', None)
         self._desired_render_mode = render_mode
         print(f"{self.xml=}")
-        # get from _get_obs
         mujoco_env.MujocoEnv.__init__(self, model_path=xml,
                                       frame_skip=4,
                                       observation_space=None,
                                       render_mode=None, )
         utils.EzPickle.__init__(self)
+
         if seed is not None:
             self.reset(seed=seed)
         else:
             self.reset()
         self.num_limbs = self.model.nbody - 1
         self.limb_obs_size = len(self._get_obs()) // self.num_limbs
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self.num_limbs * self.limb_obs_size + 1,),
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self.num_limbs * self.limb_obs_size,),
                                      dtype=np.float32)
 
     def step(self, a):
         posbefore = self.data.qpos[0]
         self.do_simulation(a, self.frame_skip)
-        posafter, height, ang = self.data.qpos[0:3]
+        posafter, height, angle = self.data.qpos[0:3]
         alive_bonus = 1.0
-        reward = ((posafter - posbefore) / self.dt)
+        reward = (posafter - posbefore) / self.dt
         reward += alive_bonus
         reward -= 1e-3 * np.square(a).sum()
-        done = not (height > 0.8 and height < 2.0 and
-                    ang > -1.0 and ang < 1.0)
-        ob = self._get_obs()
+        done = not (0.4 < height < 2.1 and -1.0 < angle < 1.0)
         terminated = bool(done)
         truncated = False
+        ob = self._get_obs()
         if hasattr(reward, 'item'):
             reward = float(reward.item())
         else:
             reward = float(reward)
-        return ob, reward, terminated, truncated, {}
+        return ob, reward, terminated, truncated, self._get_reset_info()
 
     def _get_obs(self):
-        # qpos = self.model.data.qpos
-        # qvel = self.model.data.qvel
-        # return np.concatenate([qpos[1:], np.clip(qvel, -10, 10)]).ravel()
-        def _get_obs_per_limb(body_id):
-            # Get the torso position
+        """
+        this function loops through numbers 1...num_joints, gets features, and concatenates them together in that order.
+        """
+
+        def _get_obs_per_limb(b):
+            if 'hip' in b:
+                limb_type_vec = np.array((1, 0, 0, 0))
+            elif 'knee' in b:
+                limb_type_vec = np.array((0, 1, 0, 0))
+            elif 'shoulder' in b:
+                limb_type_vec = np.array((0, 0, 1, 0))
+            elif 'elbow' in b:
+                limb_type_vec = np.array((0, 0, 0, 1))
+            else:
+                limb_type_vec = np.array((0, 0, 0, 0))
+
             torso_id = self.data.body("torso").id
             torso_x_pos = self.data.xpos[torso_id][0]
-
-            # Get body position
+            body_id = self.data.body(b).id
             xpos = self.data.xpos[body_id].copy()
             xpos[0] -= torso_x_pos
 
@@ -80,7 +87,7 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             xvelp = np.clip(self.data.cvel[body_id][:3], -10, 10)  # Linear velocity
             xvelr = self.data.cvel[body_id][3:]  # Angular velocity
 
-            obs = np.concatenate([xpos, xvelp, xvelr, expmap])
+            obs = np.concatenate([xpos, xvelp, xvelr, expmap, limb_type_vec])
 
             # Include current joint angle and joint range as input
             if body_id == torso_id:
@@ -100,8 +107,9 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             obs = np.concatenate([obs, [angle], joint_range])
             return obs
 
-        # Skip body 0 (world) and collect observations for all other bodies
-        full_obs = np.concatenate([_get_obs_per_limb(i) for i in range(1, self.model.nbody)])
+        full_obs = np.concatenate([_get_obs_per_limb(i) for i in ['left_lower_arm', 'left_shin', 'left_thigh',
+                                                                  'left_upper_arm', 'right_lower_arm', 'right_shin',
+                                                                  'right_thigh', 'right_upper_arm', 'torso']])
         return full_obs.ravel().astype(np.float32)
 
     def reset_model(self):

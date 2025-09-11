@@ -15,26 +15,27 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # "render_fps": 25,
     }
 
-    def __init__(self, xml, idx,  seed=None, **kwargs):
+    def __init__(self, xml, seed=None, **kwargs):
         print(f"HERE: self.metadata: {self.metadata}")
         self.xml = xml
-        self.idx = idx
+        self.num_nodes, self.edge_idx, self.mask = None, None, None
+
         render_mode = kwargs.get('render_mode', None)
         self._desired_render_mode = render_mode
         print(f"{self.xml=}")
-        # get from _get_obs
         mujoco_env.MujocoEnv.__init__(self, model_path=xml,
                                       frame_skip=4,
                                       observation_space=None,
                                       render_mode=None, )
         utils.EzPickle.__init__(self)
+
         if seed is not None:
             self.reset(seed=seed)
         else:
             self.reset()
         self.num_limbs = self.model.nbody - 1
         self.limb_obs_size = len(self._get_obs()) // self.num_limbs
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self.num_limbs * self.limb_obs_size + 1,),
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(self.num_limbs * self.limb_obs_size,),
                                      dtype=np.float32)
 
     def step(self, a):
@@ -49,19 +50,17 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         notdone = np.isfinite(state).all() and 0.2 <= state[2] <= 1.0
         terminated = bool(not notdone)
         truncated = False
-        # done = False
         ob = self._get_obs()
         if hasattr(reward, 'item'):
             reward = float(reward.item())
         else:
             reward = float(reward)
-        return ob, reward, terminated, truncated, {}
+        return ob, reward, terminated, truncated, self._get_reset_info()
 
     def _get_obs(self):
         """
         this function loops through numbers 1...num_joints, gets features, and concatenates them together in that order.
         """
-
         def _get_obs_per_limb(body_id):
             # Get the torso position
             torso_id = self.data.body("torso").id

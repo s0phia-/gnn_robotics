@@ -26,7 +26,7 @@ hparams = {
     "save_model_freq": 10000000000,
     # "xml_path": "environments/assets",
     "env_dir": "./environments",
-    "base_modular_env_path": "./environments/ModularEnv.py",
+    "base_modular_env_path": "./environments/modular_env.py",
     "data_dir": "./results",
     "run_id": 6,
     "run_dir": "../runs/test_run",
