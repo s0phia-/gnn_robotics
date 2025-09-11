@@ -94,10 +94,10 @@ def plot_rewards_with_seeds(folder_path):
     save_path = folder_path
     grouped_data = process_folder(folder_path)
     plt_data = average_results(grouped_data)
-    plot_averaged_data(plt_data, save_path, smoothed=True, window_size=10)
+    plot_averaged_data(plt_data, save_path, smoothed=False, window_size=10)
     return plt_data
 
 
 if __name__ == '__main__':
-    results_folder = '../../runs/gat/results'
+    results_folder = '../../runs/mujoco_results_humanoid/results'
     plot_rewards_with_seeds(results_folder)

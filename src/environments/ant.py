@@ -61,7 +61,6 @@ class ModularEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         this function loops through numbers 1...num_joints, gets features, and concatenates them together in that order.
         """
-
         def _get_obs_per_limb(body_id):
             # Get the torso position
             torso_id = self.data.body("torso").id

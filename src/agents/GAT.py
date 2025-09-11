@@ -152,8 +152,6 @@ class RegularizedGAT(GATConv):
     def edge_update(self, alpha_j: Tensor, alpha_i: OptTensor,
                     edge_attr: OptTensor, index: Tensor, ptr: OptTensor,
                     dim_size: Optional[int]) -> Tensor:
-        # Given edge-level attention coefficients for source and target nodes,
-        # we simply need to sum them up to "emulate" concatenation:
         alpha = alpha_j if alpha_i is None else alpha_j + alpha_i
         if index.numel() == 0:
             return alpha
