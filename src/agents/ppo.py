@@ -68,7 +68,11 @@ class PPO:
                 b_advantages = (b_advantages - b_advantages.mean()) / (b_advantages.std() + 1e-8)
 
             if self.anneal_lr:
-                frac = 1.0 - (t/batch_size - 1.0) / (self.total_timesteps // batch_size)
+                # guard against empty batch or total_timesteps < batch_size causing zero division
+                if batch_size == 0:
+                    continue
+                denom = max(1, (self.total_timesteps // batch_size))
+                frac = 1.0 - (t / batch_size - 1.0) / denom
                 new_lr = frac * self.learning_rate
                 if self.opt_together:
                     self.optimizer.param_groups[0]["lr"] = new_lr

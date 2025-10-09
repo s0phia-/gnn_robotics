@@ -6,17 +6,18 @@ import os
 import torch
 import torch.multiprocessing as mp
 import sys
-from src.utils.run_utils import run_worker
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+from src.utils.run_utils import run_worker
+
 
 if __name__ == '__main__':
     from src.utils import load_hparams
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=5)
+    hparams = load_hparams(os.path.join('utils', 'hyperparameters.yaml'), num_seeds=1)
     mp.set_start_method('spawn', force=True)
     mp.set_sharing_strategy('file_system')
 

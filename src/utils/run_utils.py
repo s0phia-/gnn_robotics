@@ -1,5 +1,6 @@
 import shutil
 import os
+import numpy as np
 import datetime
 import yaml
 import itertools
@@ -7,6 +8,7 @@ from copy import deepcopy
 from src.utils.logger_config import get_logger
 from src.agents import (PPO, Method1Gnn, Method2Gnn, NerveNet, FeedForward, GATTwoEdgeTypes, GATMorphology,
                         GATFullyConnected)
+from src.utils.plot_attention import plot_attention
 
 
 def load_hparams(yaml_hparam_path, num_seeds=5):
@@ -98,6 +100,9 @@ def load_agent_and_env(hparam, device):
 
 
 def run_worker(args):
+
+    save_final_attention_weights = True
+
     """Worker function that handles both GPU and CPU cases"""
     import torch
     os.environ['OMP_NUM_THREADS'] = '2'  # OpenMP threads
@@ -124,5 +129,7 @@ def run_worker(args):
                     env=env,
                     **hparam)
         agent.learn()
-
+        edge_index = env.edge_idx.detach().cpu().numpy()
+        node_order = env.node_order
+        plot_attention(edge_index = edge_index, attention_scores = agent.actor.attention_history, node_labels = node_order)
     return run(hparam, device)

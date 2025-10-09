@@ -1,7 +1,9 @@
 from src.agents.nerve_net import *
 from torch_geometric.nn import GATConv
 from typing import Optional, Tuple, Union
+from collections import deque
 from torch import Tensor
+import numpy as np
 from torch_geometric.typing import OptTensor
 import torch.nn.functional as F
 from torch_geometric.utils import softmax
@@ -99,6 +101,7 @@ class GATFullyConnected(MessagePassingGNN):
                 heads=2,
                 concat=False,
             ).to(device))
+        self.attention_history = deque(maxlen=2000)
 
     def forward(self, data: Data):
         x, edge_idx, mask, num_nodes, batch, node_dim, edge_attr = (data.x, data.edge_index, data.mask, data.num_nodes,
@@ -111,12 +114,17 @@ class GATFullyConnected(MessagePassingGNN):
             x = self.encoder(x, node_dim[0].item())  # todo
 
         for i in range(self.propagation_steps - 1):
-            x = self.middle[i](x=x, edge_index=edge_idx)
+            x, attention_weights = self.middle[i](x=x, edge_index=edge_idx, return_attention_weights=True)
+            if batch is None:
+                self.attention_history.append(attention_weights[1].detach().cpu().numpy())
 
         x = self.decoder(x=x, batch=batch, batch_size=batch_size, mask=mask)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         return x
+    
+    def clear_attention_history(self):
+        self.attention_history = []
 
 
 class RegularizedGAT(GATConv):
