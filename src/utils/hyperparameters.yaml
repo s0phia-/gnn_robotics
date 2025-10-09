@@ -31,25 +31,25 @@ method:
 #  - NerveNet
 #  - FeedForward
 #  - GATTwoEdgeTypes
-  - GATMorphology
-#  - GATFullyConnected
+#  - GATMorphology
+  - GATFullyConnected
 propagation_steps:
 #  - 3
-#  - 4
+  - 4
 #  - 5
 #  - 6
 node_hidden_size:
 #  - 32
 #  - 64
-#  - 128
+  - 128
 network_shape:
 #  - [64,64]
 #  - [128,128]
-  - [254, 254]
-#  - [64,64,64]
+#  - [254, 254]
+  - [64,64,64]
 decoder_and_message_layers: 2
 decoder_and_message_hidden_dim:
-#  - 64
+  - 64
 #  - 128
 #  - 256
 

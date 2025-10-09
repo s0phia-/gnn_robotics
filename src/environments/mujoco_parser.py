@@ -267,6 +267,7 @@ class ModularEnvWrapper(gym.Wrapper):
         self.num_nodes = num_nodes
         self.edge_idx, self.edge_labels = create_edges(env)
         self.mask = check_actuators(env)
+        self.node_order = get_node_order(env)
 
     def step(self, action):  # ordering introduced here
         action = action[:self.num_limbs]  # clip the 0-padding before processing
@@ -325,3 +326,11 @@ def check_actuators(env):
         (f"Actuator ordering in XML file does not match Mujoco's expected ordering. Please search for <actuator> in the"
          f"xml file and rearrange the motor objects to match Mujoco's expected ordering: {new_list}")
     return mask
+
+
+def get_node_order(env):
+    body_part_idxs = []
+    for body_part in ['aux_1', 'aux_2', 'aux_3', 'aux_4', 'f_1', 'f_2', 'f_3', 'f_4', 'torso']:
+        idx = env.unwrapped.data.body(body_part).id - 1
+        body_part_idxs.append([idx, body_part])
+    return body_part_idxs
